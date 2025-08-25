@@ -1,6 +1,6 @@
 import torch
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-DATA_PATH = "data/data.json"
+DATASET_PATH = "data/data.json"
 TRAINED_PATH = "data/data.pth"
 META_PATH = "data/meta.bin"
 RETRAIN_MODEL = False

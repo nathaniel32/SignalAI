@@ -6,7 +6,6 @@ import torch.nn as nn
 from sklearn import preprocessing
 from torchmetrics import ConfusionMatrix
 from mlxtend.plotting import plot_confusion_matrix
-import torch
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 import matplotlib.dates as mdates
@@ -22,7 +21,7 @@ def plot_dataset_all(df):
 
 def plot_dataset_chart(df):
     # index datetime
-    df.index = pd.to_datetime(df.index)
+    # df.index = pd.to_datetime(df.index)
 
     colors = {"BUY": "green", "SELL": "red", "HOLD": "blue"}
 
@@ -342,19 +341,18 @@ def get_data(data_path):
     user_features, ai_features = create_advanced_features(df=df)
     create_labels(df=df)
     
-    plot_dataset_all(df=df)
-    plot_dataset_chart(df=df[user_features + ["Label"]])
+    # plot_dataset_all(df=df)
+    # plot_dataset_chart(df=df[user_features + ["Label"]])
 
     # label encoding
     encoder_name = preprocessing.LabelEncoder()
     df['Label'] = encoder_name.fit_transform(df["Label"])
 
     # ambil hanya feature yg penting
-    df = df[ai_features + ["Label"]].dropna(axis=0)
-    print(df)
+    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce").dropna(axis=0)
     
     labels = df['Label'].values
-    features = df.apply(pd.to_numeric, errors="coerce").values
+    features = df.drop(columns=["Label"]).values
     
     return features, labels, encoder_name
 

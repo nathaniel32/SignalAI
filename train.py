@@ -14,12 +14,12 @@ logging.basicConfig(level=logging.INFO)
 
 def train():
     try:
-        features, labels, encoder_labels = utils.get_data(config.DATA_PATH)
+        features, labels, encoder_labels = utils.get_data(config.DATASET_PATH)
         
-        logging.debug(features.shape)
-        #logging.debug(features)
-        #logging.debug(labels)
-        #logging.debug(encoder_labels.classes_)
+        logging.info(features.shape)
+        #logging.info(features)
+        #logging.info(labels)
+        #logging.info(encoder_labels.classes_)
 
         if len(features) > 1:
             meta_data = {
@@ -28,11 +28,6 @@ def train():
             joblib.dump(meta_data, config.META_PATH)
 
             train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels
-
-            print(type(train_data))
-            print(type(val_data))
-            print(type(train_labels))
-            print(type(val_labels))
         
             train_dataset = utils.DatasetManager(features=train_data, labels=train_labels, sequence_length=config.SEQUENCE_LENGTH)
             train_data_loader = DataLoader( dataset=train_dataset,

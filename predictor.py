@@ -1,38 +1,63 @@
-import api
 import joblib
 import torch
-import nn_authentifizierung.utils
-from nn_authentifizierung.model import Model
+import utils
+import model as nn_model
 import config
 import os
+import json
+import pandas as pd
 
 class Predictor:
     def __init__(self, model_path):
         if not os.path.isfile(model_path):
-            raise FileNotFoundError(f"\nSie müssen Authentifizierung-KI auf main.py trainieren")
+            raise FileNotFoundError(f"\nYou need to train AI on main.py")
         self.device = config.DEVICE
-        self.meta_data = joblib.load(config.AUTHENTIFIZIERUNG_META_PATH)
+        self.meta_data = joblib.load(config.META_PATH)
         
-        self.encoder_benutzerids = self.meta_data['encoder_benutzerids']
+        self.encoder_labels = self.meta_data['encoder_labels']
         
-        self.num_benutzerids = len(self.encoder_benutzerids.classes_)
+        self.num_benutzerids = len(self.encoder_labels.classes_)
 
-        self.model = Model(self.num_benutzerids, config.AUTHENTIFIZIERUNG_HIDDEN_UNITS_1, config.AUTHENTIFIZIERUNG_HIDDEN_UNITS_2)
+        self.model = nn_model.Model(
+            input_size=14,
+            hidden_size=128,
+            num_layers=2,
+            dropout=0.3,
+            num_classes=len(self.encoder_labels.classes_)
+        )
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
         self.model.to(self.device).eval()
     
-    def merkmale_prediction(self, mfcc_tensor):
+    def prediction(self, features):
         with torch.no_grad():
-            name_lg = self.model(mfcc_tensor)
-        return name_lg
+            logits = self.model(features)
+        return logits
     
-    def name_extraction(self, name_lg):
-        class_scores, class_preds = nn_authentifizierung.utils.to_yhat(name_lg)
-        return class_preds, [self.encoder_benutzerids.classes_, class_scores[0]]
+    def logits_extraction(self, logits):
+        class_scores, class_preds = utils.to_yhat(logits)
+        return class_preds, [self.encoder_labels.classes_, class_scores[0]]
                 
-    def predict(self, merkmale_data):
-        # merkmale_data = nn_authentifizierung.utils.record_voice(5, api.AUDIO_SAMPLE_RATE)
-        merkmale_features = nn_authentifizierung.utils.extract_features(merkmale_data, api.AUDIO_SAMPLE_RATE)
-        mfcc_tensor = torch.FloatTensor(merkmale_features).unsqueeze(0).to(self.device)
-        name_lg = self.merkmale_prediction(mfcc_tensor)
-        return self.name_extraction(name_lg)
+    def main(self):
+        with open(config.DATASET_PATH, "r") as f:
+            data = json.load(f)
+
+        candles = data["Candles"][0]["Candles"]
+        df = pd.DataFrame(candles)
+        df["FromDate"] = pd.to_datetime(df["FromDate"])
+        df.set_index("FromDate", inplace=True)
+
+        _, ai_features = utils.create_advanced_features(df=df)
+
+        df = df[ai_features].apply(pd.to_numeric, errors="coerce").dropna(axis=0)
+        
+        # last row
+        df = df.tail(1)
+        print("Timestamp: ", df.index[0])
+
+        feature = df.values[0]
+        feature_tensor = torch.tensor(feature, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(config.DEVICE)
+        logits = self.prediction(feature_tensor)
+        return self.logits_extraction(logits)
+    
+pred = Predictor(config.TRAINED_PATH)
+print(pred.main())
