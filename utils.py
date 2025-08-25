@@ -143,41 +143,6 @@ def create_labels(df):
 
     df["Label"] = df["Future_Return"].apply(create_label)
 
-""" def create_advanced_features(df):
-    # Simple Moving Average (SMA)
-    df["SMA_5"] = df["Close"].rolling(window=5).mean()
-
-    # Exponential Moving Average (EMA)
-    df["EMA_5"] = df["Close"].ewm(span=5, adjust=False).mean()
-
-    # Relative Strength Index (RSI)
-    delta = df["Close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    roll_up = pd.Series(gain).rolling(14).mean()
-    roll_down = pd.Series(loss).rolling(14).mean()
-    rs = roll_up / roll_down
-    df["RSI_14"] = 100 - (100 / (1 + rs))
-
-    # MACD
-    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
-    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
-    df["MACD"] = ema12 - ema26
-    df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
-
-    # ATR (Average True Range)
-    df["H-L"] = df["High"] - df["Low"]
-    df["H-C"] = abs(df["High"] - df["Close"].shift())
-    df["L-C"] = abs(df["Low"] - df["Close"].shift())
-    df["TR"] = df[["H-L", "H-C", "L-C"]].max(axis=1)
-    df["ATR_14"] = df["TR"].rolling(14).mean()
-
-    # Bollinger Bands
-    df["SMA_20"] = df["Close"].rolling(window=20).mean()
-    df["STDDEV_20"] = df["Close"].rolling(window=20).std()
-    df["UpperBB"] = df["SMA_20"] + (df["STDDEV_20"] * 2)
-    df["LowerBB"] = df["SMA_20"] - (df["STDDEV_20"] * 2) """
-
 def create_advanced_features(df):
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
@@ -341,7 +306,7 @@ def get_data(data_path):
     user_features, ai_features = create_advanced_features(df=df)
     create_labels(df=df)
     
-    # plot_dataset_all(df=df)
+    plot_dataset_all(df=df[ai_features])
     # plot_dataset_chart(df=df[user_features + ["Label"]])
 
     # label encoding

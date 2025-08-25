@@ -6,6 +6,7 @@ import config
 import os
 import json
 import pandas as pd
+import numpy as np
 
 class Predictor:
     def __init__(self, model_path):
@@ -60,4 +61,9 @@ class Predictor:
         return self.logits_extraction(logits)
     
 pred = Predictor(config.TRAINED_PATH)
-print(pred.main())
+pred_index, (classes, probs) = pred.main()
+sorted_idx = np.argsort(probs)[::-1]
+
+print("Hasil prediksi:")
+for i in sorted_idx:
+    print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")
