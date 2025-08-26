@@ -1,12 +1,11 @@
 import joblib
 import torch
-import utils
-import model as nn_model
+import nn_signal.utils as utils
+import nn_signal.model as nn_model
 import config
 import os
 import json
 import pandas as pd
-import numpy as np
 
 class Predictor:
     def __init__(self, model_path):
@@ -59,11 +58,3 @@ class Predictor:
         feature_tensor = torch.tensor(feature, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(config.DEVICE)
         logits = self.prediction(feature_tensor)
         return self.logits_extraction(logits)
-    
-pred = Predictor(config.TRAINED_PATH)
-pred_index, (classes, probs) = pred.main()
-sorted_idx = np.argsort(probs)[::-1]
-
-print("Hasil prediksi:")
-for i in sorted_idx:
-    print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")

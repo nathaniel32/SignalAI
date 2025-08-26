@@ -398,9 +398,7 @@ def train_fn(data_loader, model, optimizer, device):
 
     return final_loss/len(data_loader)
 
-def val_fn( data_loader,
-            model,
-            device):
+def val_fn(data_loader, model, device):
     
     model.eval()
     final_loss = 0
