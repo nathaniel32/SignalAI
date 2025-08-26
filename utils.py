@@ -10,6 +10,11 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 import matplotlib.dates as mdates
 from sklearn.utils import resample
+from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.combine import SMOTETomek, SMOTEENN
+from collections import Counter
+import config
 
 def plot_dataset_all(df):
     n = len(df.columns)
@@ -123,20 +128,19 @@ class DatasetManager(torch.utils.data.Dataset):
 
 def create_labels(df):
     # Label
-    horizon = 3   # lihat 3 candle ke depan
-    threshold = 0.001  # 0.1% ambang batas
+    THRESHOLD_LABEL = 0.001  # 0.1% ambang batas
 
     # Geser harga close ke depan
-    df["Future_Close"] = df["Close"].shift(-horizon)
+    df["Future_Close"] = df["Close"].shift(-config.HORIZON_LABEL)
 
     # Hitung return masa depan
     df["Future_Return"] = (df["Future_Close"] - df["Close"]) / df["Close"]
 
     # Buat label berdasarkan aturan
     def create_label(x):
-        if x > threshold:
+        if x > THRESHOLD_LABEL:
             return "BUY"
-        elif x < -threshold:
+        elif x < -config.THRESHOLD_LABEL:
             return "SELL"
         else:
             return "HOLD"
@@ -294,7 +298,7 @@ def create_advanced_features(df):
         
     return user_features, ai_features
 
-def get_data(data_path):
+def get_data(data_path, balance_method='smote', random_state=42):
     with open(data_path, "r") as f:
         data = json.load(f)
     
@@ -307,7 +311,7 @@ def get_data(data_path):
     create_labels(df=df)
     
     plot_dataset_all(df=df[ai_features])
-    # plot_dataset_chart(df=df[user_features + ["Label"]])
+    plot_dataset_chart(df=df[user_features + ["Label"]])
 
     # label encoding
     encoder_name = preprocessing.LabelEncoder()
@@ -318,55 +322,50 @@ def get_data(data_path):
     
     labels = df['Label'].values
     features = df.drop(columns=["Label"]).values
-    
-    return features, labels, encoder_name
 
-""" 
-# balance data
-def get_data(data_path):
-    with open(data_path, "r") as f:
-        data = json.load(f)
+    # Apply balancing technique
+    features_balanced, labels_balanced = balance_data(
+        features, labels, method=balance_method, random_state=random_state
+    )
     
-    candles = data["Candles"][0]["Candles"]
-    df = pd.DataFrame(candles)
-    df["FromDate"] = pd.to_datetime(df["FromDate"])
-    df.set_index("FromDate", inplace=True)
+    return features_balanced, labels_balanced, encoder_name
 
-    create_advanced_features(df=df)
-    create_labels(df=df)
+def balance_data(features, labels, method, random_state):
+    if method == 'smote':
+        # SMOTE - Synthetic Minority Oversampling Technique
+        smote = SMOTE(random_state=random_state, k_neighbors=min(5, Counter(labels).most_common()[-1][1]-1))
+        features_balanced, labels_balanced = smote.fit_resample(features, labels)
+        
+    elif method == 'adasyn':
+        # ADASYN - Adaptive Synthetic Sampling
+        adasyn = ADASYN(random_state=random_state)
+        features_balanced, labels_balanced = adasyn.fit_resample(features, labels)
+        
+    elif method == 'oversample':
+        # Random Oversampling
+        ros = RandomOverSampler(random_state=random_state)
+        features_balanced, labels_balanced = ros.fit_resample(features, labels)
+        
+    elif method == 'undersample':
+        # Random Undersampling
+        rus = RandomUnderSampler(random_state=random_state)
+        features_balanced, labels_balanced = rus.fit_resample(features, labels)
+        
+    elif method == 'combine':
+        # Combined approach: SMOTE + Tomek links
+        smote_tomek = SMOTETomek(random_state=random_state)
+        features_balanced, labels_balanced = smote_tomek.fit_resample(features, labels)
+        
+    elif method == 'smoteenn':
+        # SMOTE + Edited Nearest Neighbours
+        smote_enn = SMOTEENN(random_state=random_state)
+        features_balanced, labels_balanced = smote_enn.fit_resample(features, labels)
+         
+    else:
+        print(f"Unknown method: {method}. Using original data.")
+        features_balanced, labels_balanced = features, labels
     
-    indicators = ["Open", "High", "Low", "Close", "SMA_5", "EMA_5", "RSI_14", "MACD", "Signal", "ATR_14", "UpperBB", "LowerBB"]
-    df = df[indicators + ["Label"]].dropna(axis=0)
-    
-    # Encode label
-    encoder_name = preprocessing.LabelEncoder()
-    df['Label'] = encoder_name.fit_transform(df["Label"])
-    
-    # =====================
-    # Balancing dataset
-    # =====================
-    # Pisahkan per kelas
-    classes = df['Label'].unique()
-    dfs = [df[df['Label'] == c] for c in classes]
-    
-    # Tentukan jumlah data target (kelas mayoritas)
-    max_size = max(len(d) for d in dfs)
-    
-    # Oversample semua kelas ke jumlah max_size
-    dfs_upsampled = [resample(d, replace=True, n_samples=max_size, random_state=42) for d in dfs]
-    
-    # Gabungkan semua kelas
-    df_balanced = pd.concat(dfs_upsampled)
-    
-    # Shuffle dataset
-    df_balanced = df_balanced.sample(frac=1, random_state=42).reset_index(drop=True)
-    
-    important_indicators = ["RSI_14", "MACD", "Signal", "ATR_14"]
-
-    labels = df_balanced['Label'].values
-    features = df_balanced[important_indicators].apply(pd.to_numeric, errors="coerce").values
-    
-    return features, labels, encoder_name """
+    return features_balanced, labels_balanced
 
 loss_fn = nn.CrossEntropyLoss()
 

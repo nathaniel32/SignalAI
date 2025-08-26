@@ -46,9 +46,9 @@ def train():
             device = config.DEVICE 
             model = nn_model.Model(
                 input_size=features.shape[1],
-                hidden_size=128,
-                num_layers=2,
-                dropout=0.3,
+                hidden_size=config.HIDDEN_SIZE,
+                num_layers=config.NUM_LAYERS,
+                dropout=config.DROPOUT,
                 num_classes=len(encoder_labels.classes_)
             )
             model.to(device)
@@ -60,7 +60,7 @@ def train():
                 except Exception as e:
                     print(f"\nError loading model for retraining: {e}")
 
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
 
             best_loss = float('inf')
             best_epochs = 1
@@ -103,7 +103,7 @@ def train():
             print(f"\nTraining duration: {trainingsdauer:.2f} minutes")
 
             utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | AI", plot=True)
-            summary(model, input_size=(config.TRAIN_BATCH_SIZE, 20, features.shape[1]))
+            summary(model, input_size=(config.TRAIN_BATCH_SIZE, config.SEQUENCE_LENGTH, features.shape[1]))
         else:
             print("\n!!!Too little features to train AI!!!")
     except Exception as e:
