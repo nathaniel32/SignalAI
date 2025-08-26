@@ -22,11 +22,6 @@ def train():
         #logging.info(encoder_labels.classes_)
 
         if len(features) > 1:
-            meta_data = {
-                'encoder_labels': encoder_labels
-            }
-            joblib.dump(meta_data, config.META_PATH)
-
             train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels
         
             train_dataset = utils.DatasetManager(features=train_data, labels=train_labels, sequence_length=config.SEQUENCE_LENGTH)
@@ -52,6 +47,16 @@ def train():
                 num_classes=len(encoder_labels.classes_)
             )
             model.to(device)
+
+            meta_data = {
+                'encoder_labels': encoder_labels,
+                "input_size": features.shape[1],
+                "hidden_size": config.HIDDEN_SIZE,
+                "num_layers": config.NUM_LAYERS,
+                "dropout": config.DROPOUT,
+                "num_classes": len(encoder_labels.classes_)
+            }
+            joblib.dump(meta_data, config.META_PATH)
 
             if config.RETRAIN_MODEL:
                 try:

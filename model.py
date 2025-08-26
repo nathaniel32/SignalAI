@@ -548,7 +548,6 @@ class Model(nn.Module):
         
         return main_output """
 
-import torch
 import torch.nn as nn
 class Model(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout, num_classes):
@@ -657,34 +656,3 @@ class Model(nn.Module):
         logits = self.classifier(features)
         
         return logits
-
-
-# Example training step
-def train_step(model, dataloader, optimizer, criterion, device):
-    model.train()
-    total_loss = 0
-    correct = 0
-    total = 0
-    
-    for batch_idx, (data, targets) in enumerate(dataloader):
-        data, targets = data.to(device), targets.to(device)
-        
-        optimizer.zero_grad()
-        outputs = model(data)
-        loss = criterion(outputs, targets)
-        
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
-        loss.backward()
-        optimizer.step()
-        
-        total_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-    
-    accuracy = 100. * correct / total
-    avg_loss = total_loss / len(dataloader)
-    
-    return avg_loss, accuracy

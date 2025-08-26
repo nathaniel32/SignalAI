@@ -6,3 +6,4 @@ torchmetrics
 mlxtend
 mplfinance
 torchinfo
+imbalanced-learn

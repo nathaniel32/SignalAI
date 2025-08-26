@@ -20,11 +20,11 @@ class Predictor:
         self.num_benutzerids = len(self.encoder_labels.classes_)
 
         self.model = nn_model.Model(
-            input_size=14,
-            hidden_size=128,
-            num_layers=2,
-            dropout=0.3,
-            num_classes=len(self.encoder_labels.classes_)
+            input_size=self.meta_data['input_size'],
+            hidden_size=self.meta_data['hidden_size'],
+            num_layers=self.meta_data['num_layers'],
+            dropout=self.meta_data['dropout'],
+            num_classes=self.meta_data['num_classes']
         )
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
         self.model.to(self.device).eval()
