@@ -16,14 +16,14 @@ class Trainer:
     def __init__(self):
         pass
 
-    def main(self):
+    def main(self, df):
         try:
-            features, labels, encoder_labels = utils.get_data(config.DATASET_PATH)
+            features, labels, encoder_labels = utils.prepare_data(df)
             
             logging.info(features.shape)
-            #logging.info(features)
-            #logging.info(labels)
-            #logging.info(encoder_labels.classes_)
+            logging.info(features)
+            logging.info(labels)
+            logging.info(encoder_labels.classes_)
 
             if len(features) > 1:
                 train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels

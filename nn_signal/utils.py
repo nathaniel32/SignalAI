@@ -42,7 +42,7 @@ def plot_dataset_chart(df):
     # scatter label
     for label, color in colors.items():
         idx = df[df["Label"] == label].index
-        price = df.loc[idx, "Close"]
+        price = df.loc[idx, "close"]
         ax[0].scatter(idx, price, label=label, color=color, s=30, marker="o")
 
     # x-axis = date
@@ -131,10 +131,10 @@ def create_labels(df):
     THRESHOLD_LABEL = 0.001  # 0.1% ambang batas
 
     # Geser harga close ke depan
-    df["Future_Close"] = df["Close"].shift(-config.HORIZON_LABEL)
+    df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
 
     # Hitung return masa depan
-    df["Future_Return"] = (df["Future_Close"] - df["Close"]) / df["Close"]
+    df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
 
     # Buat label berdasarkan aturan
     def create_label(x):
@@ -148,39 +148,46 @@ def create_labels(df):
     df["Label"] = df["Future_Return"].apply(create_label)
 
 def create_advanced_features(df):
+    df["open"] =df["open"].astype(float)
+    df["close"] =df["close"].astype(float)
+    df["low"] =df["low"].astype(float)
+    df["high"] =df["high"].astype(float)
+    df["volume"] =df["volume"].astype(float)
+    df["adjusted_close"] =df["adjusted_close"].astype(float)
+
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
     # Hourly price change percentage
-    df["Price_Change_Pct"] = (df["Close"] - df["Open"]) / df["Open"] * 100
+    df["Price_Change_Pct"] = (df["close"] - df["open"]) / df["open"] * 100
     
     # Price change from previous period
-    df["Price_Change_Prev_Pct"] = df["Close"].pct_change() * 100
+    df["Price_Change_Prev_Pct"] = df["close"].pct_change() * 100
     
     # High-Low range as percentage of close
-    df["HL_Range_Pct"] = (df["High"] - df["Low"]) / df["Close"] * 100
+    df["HL_Range_Pct"] = (df["high"] - df["low"]) / df["close"] * 100
     
     
     # ===== MOVING AVERAGES (Relative to current price) =====
     
     # SMA deviation from current price
-    df["SMA_5"] = df["Close"].rolling(window=5).mean()
-    df["SMA_5_Deviation_Pct"] = (df["Close"] - df["SMA_5"]) / df["SMA_5"] * 100
+    df["SMA_5"] = df["close"].rolling(window=5).mean()
+    df["SMA_5_Deviation_Pct"] = (df["close"] - df["SMA_5"]) / df["SMA_5"] * 100
     
-    df["SMA_10"] = df["Close"].rolling(window=10).mean()
-    df["SMA_10_Deviation_Pct"] = (df["Close"] - df["SMA_10"]) / df["SMA_10"] * 100
+    df["SMA_10"] = df["close"].rolling(window=10).mean()
+    df["SMA_10_Deviation_Pct"] = (df["close"] - df["SMA_10"]) / df["SMA_10"] * 100
     
     # EMA deviation from current price
-    df["EMA_5"] = df["Close"].ewm(span=5, adjust=False).mean()
-    df["EMA_5_Deviation_Pct"] = (df["Close"] - df["EMA_5"]) / df["EMA_5"] * 100
+    df["EMA_5"] = df["close"].ewm(span=5, adjust=False).mean()
+    df["EMA_5_Deviation_Pct"] = (df["close"] - df["EMA_5"]) / df["EMA_5"] * 100
     
-    df["EMA_12"] = df["Close"].ewm(span=12, adjust=False).mean()
-    df["EMA_12_Deviation_Pct"] = (df["Close"] - df["EMA_12"]) / df["EMA_12"] * 100
+    df["EMA_12"] = df["close"].ewm(span=12, adjust=False).mean()
+    df["EMA_12_Deviation_Pct"] = (df["close"] - df["EMA_12"]) / df["EMA_12"] * 100
     
     
     # ===== MOMENTUM INDICATORS (Already normalized 0-100) =====
     
     # RSI (already 0-100 scale)
-    delta = df["Close"].diff()
+    delta = df["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     roll_up = gain.rolling(14).mean()
@@ -194,80 +201,80 @@ def create_advanced_features(df):
     
     # ===== MACD (Normalized) =====
     
-    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
-    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
+    ema12 = df["close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["close"].ewm(span=26, adjust=False).mean()
     df["MACD"] = ema12 - ema26
     df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
     
     # MACD as percentage of price
-    df["MACD_Pct"] = df["MACD"] / df["Close"] * 100
-    df["Signal_Pct"] = df["Signal"] / df["Close"] * 100
-    df["MACD_Histogram_Pct"] = (df["MACD"] - df["Signal"]) / df["Close"] * 100
+    df["MACD_Pct"] = df["MACD"] / df["close"] * 100
+    df["Signal_Pct"] = df["Signal"] / df["close"] * 100
+    df["MACD_Histogram_Pct"] = (df["MACD"] - df["Signal"]) / df["close"] * 100
     
     
     # ===== VOLATILITY INDICATORS (Normalized) =====
     
     # ATR as percentage of price
-    df["H-L"] = df["High"] - df["Low"]
-    df["H-C"] = abs(df["High"] - df["Close"].shift())
-    df["L-C"] = abs(df["Low"] - df["Close"].shift())
+    df["H-L"] = df["high"] - df["low"]
+    df["H-C"] = abs(df["high"] - df["close"].shift())
+    df["L-C"] = abs(df["low"] - df["close"].shift())
     df["TR"] = df[["H-L", "H-C", "L-C"]].max(axis=1)
     df["ATR_14"] = df["TR"].rolling(14).mean()
-    df["ATR_Pct"] = df["ATR_14"] / df["Close"] * 100
+    df["ATR_Pct"] = df["ATR_14"] / df["close"] * 100
     
     
     # ===== BOLLINGER BANDS (Position based) =====
     
-    df["SMA_20"] = df["Close"].rolling(window=20).mean()
-    df["STDDEV_20"] = df["Close"].rolling(window=20).std()
+    df["SMA_20"] = df["close"].rolling(window=20).mean()
+    df["STDDEV_20"] = df["close"].rolling(window=20).std()
     df["UpperBB"] = df["SMA_20"] + (df["STDDEV_20"] * 2)
     df["LowerBB"] = df["SMA_20"] - (df["STDDEV_20"] * 2)
     
     # Bollinger Band position (0 = at lower band, 1 = at upper band)
-    df["BB_Position"] = (df["Close"] - df["LowerBB"]) / (df["UpperBB"] - df["LowerBB"])
+    df["BB_Position"] = (df["close"] - df["LowerBB"]) / (df["UpperBB"] - df["LowerBB"])
     
     # Distance from bands as percentage
-    df["BB_Upper_Distance_Pct"] = (df["UpperBB"] - df["Close"]) / df["Close"] * 100
-    df["BB_Lower_Distance_Pct"] = (df["Close"] - df["LowerBB"]) / df["Close"] * 100
+    df["BB_Upper_Distance_Pct"] = (df["UpperBB"] - df["close"]) / df["close"] * 100
+    df["BB_Lower_Distance_Pct"] = (df["close"] - df["LowerBB"]) / df["close"] * 100
     
     
     # ===== VOLUME INDICATORS =====
     
-    """ if "Volume" in df.columns:
+    if "volume" in df.columns:
         # Volume change percentage
-        df["Volume_Change_Pct"] = df["Volume"].pct_change() * 100
+        df["Volume_Change_Pct"] = df["volume"].pct_change() * 100
         
         # Volume moving average deviation
-        df["Volume_MA_5"] = df["Volume"].rolling(5).mean()
-        df["Volume_MA_Deviation_Pct"] = (df["Volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100 """
+        df["Volume_MA_5"] = df["volume"].rolling(5).mean()
+        df["Volume_MA_Deviation_Pct"] = (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100
     
     # ===== TREND STRENGTH INDICATORS =====
     
     # Price momentum over different periods
-    df["Momentum_3"] = (df["Close"] - df["Close"].shift(3)) / df["Close"].shift(3) * 100
-    df["Momentum_5"] = (df["Close"] - df["Close"].shift(5)) / df["Close"].shift(5) * 100
-    df["Momentum_10"] = (df["Close"] - df["Close"].shift(10)) / df["Close"].shift(10) * 100
+    df["Momentum_3"] = (df["close"] - df["close"].shift(3)) / df["close"].shift(3) * 100
+    df["Momentum_5"] = (df["close"] - df["close"].shift(5)) / df["close"].shift(5) * 100
+    df["Momentum_10"] = (df["close"] - df["close"].shift(10)) / df["close"].shift(10) * 100
     
     # Trend consistency (how many of last N periods were up/down)
-    df["Up_Periods_5"] = (df["Close"].diff() > 0).rolling(5).sum() / 5
-    df["Down_Periods_5"] = (df["Close"].diff() < 0).rolling(5).sum() / 5
+    df["Up_Periods_5"] = (df["close"].diff() > 0).rolling(5).sum() / 5
+    df["Down_Periods_5"] = (df["close"].diff() < 0).rolling(5).sum() / 5
     
     
     # ===== PATTERN RECOGNITION FEATURES =====
 
     # Doji pattern (open close to close)
-    df["Doji_Pattern"] = abs(df["Close"] - df["Open"]) / (df["High"] - df["Low"])
+    df["Doji_Pattern"] = abs(df["close"] - df["open"]) / (df["high"] - df["low"])
     
     # Hammer/Shooting star patterns
-    body_size = abs(df["Close"] - df["Open"])
-    upper_shadow = df["High"] - df[["Close", "Open"]].max(axis=1)
-    lower_shadow = df[["Close", "Open"]].min(axis=1) - df["Low"]
+    body_size = abs(df["close"] - df["open"])
+    upper_shadow = df["high"] - df[["close", "open"]].max(axis=1)
+    lower_shadow = df[["close", "open"]].min(axis=1) - df["low"]
     
     df["Upper_Shadow_Ratio"] = upper_shadow / body_size
     df["Lower_Shadow_Ratio"] = lower_shadow / body_size
     
     # ===== User features =====
-    user_features = ["Open", "High", "Low", "Close", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
+    user_features = ["open", "high", "low", "close", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
     
     """ if "Volume_MA_5" in df.columns:
         user_features.append("Volume_MA_5") """
@@ -293,25 +300,17 @@ def create_advanced_features(df):
     ]
     
     # volume features
-    """ if "Volume_Change_Pct" in df.columns:
-        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct"]) """
+    if "Volume_Change_Pct" in df.columns:
+        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct"])
         
     return user_features, ai_features
 
-def get_data(data_path, balance_method='smote', random_state=42):
-    with open(data_path, "r") as f:
-        data = json.load(f)
-    
-    candles = data["Candles"][0]["Candles"]
-    df = pd.DataFrame(candles)
-    df["FromDate"] = pd.to_datetime(df["FromDate"])
-    df.set_index("FromDate", inplace=True)
-
+def prepare_data(df, balance_method='smote', random_state=42):
     user_features, ai_features = create_advanced_features(df=df)
     create_labels(df=df)
     
     plot_dataset_all(df=df[ai_features])
-    plot_dataset_chart(df=df[user_features + ["Label"]])
+    #plot_dataset_chart(df=df[user_features + ["Label"]])
 
     # label encoding
     encoder_name = preprocessing.LabelEncoder()

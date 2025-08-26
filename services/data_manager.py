@@ -76,3 +76,14 @@ class DataManager:
             self.session.rollback()
             print("Error importing CSV:", e)
 
+    def get_data(self):
+        query = self.session.query(TPrice).all()
+
+        data = [
+            {c.name: getattr(row, c.name) for c in row.__table__.columns}
+            for row in query
+        ]
+
+        df = pd.DataFrame(data)
+        return df
+

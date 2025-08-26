@@ -4,7 +4,7 @@ from nn_signal.predictor import Predictor
 import config
 import numpy as np
 
-class Setting:
+class Main:
     def __init__(self):
         self.data_manager = DataManager()
         self.predictor = Predictor(config.TRAINED_PATH)
@@ -13,7 +13,7 @@ class Setting:
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
             ('Create Tables', lambda: self.data_manager.create_tables()),
             ('Import CSV', lambda: self.import_csv_to_database()),
-            ('Train AI', lambda: self.trainer.main()),
+            ('Train AI', lambda: self.trainer.main(df=self.data_manager.get_data())),
             ('Predict Signal', lambda: self.predict()),
         ]
 
@@ -53,7 +53,7 @@ class Setting:
                 print("Invalid input!")
 
 if __name__ == "__main__":
-    app = Setting()
+    app = Main()
     app.data_manager.start_session()
     app.data_manager.create_tables()
     app.menu()
