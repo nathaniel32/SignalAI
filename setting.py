@@ -6,7 +6,15 @@ class Setting:
         self.menu_items = [
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
             ('Create Tables', lambda: self.data_manager.create_tables()),
+            ('Import CSV', lambda: self.import_csv_to_database()),
         ]
+
+    def import_csv_to_database(self):
+        file_path = input("CSV path: ").strip()
+        market_id = input("Market ID: ").strip()
+        symbol = input("Symbol: ").strip()
+        period = input("Period: ").strip()
+        self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column="Date", open_column="Open", high_column="High", low_column="Low", close_column="Close", volume_column="Volume", adjusted_close_column="Adjusted Close")
 
     def menu(self):
         while True:
