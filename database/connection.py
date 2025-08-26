@@ -45,7 +45,10 @@ class Connection:
         self.session: Session = None
 
     def create_tables(self):
-        model_base.metadata.create_all(bind=self.engine)
+        try:
+            model_base.metadata.create_all(bind=self.engine)
+        except Exception as e:
+            raise e
 
     def get_session(self):
         self.session = self.SessionLocal()
