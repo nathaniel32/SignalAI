@@ -85,5 +85,9 @@ class DataManager:
         ]
 
         df = pd.DataFrame(data)
+
+        df['data_date'] = pd.to_datetime(df['data_date'])
+        df.set_index('data_date', inplace=True)
+        
         return df
 

@@ -154,7 +154,7 @@ def create_advanced_features(df):
     df["high"] =df["high"].astype(float)
     df["volume"] =df["volume"].astype(float)
     df["adjusted_close"] =df["adjusted_close"].astype(float)
-
+    
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
     # Hourly price change percentage
@@ -310,22 +310,20 @@ def prepare_data(df, balance_method='smote', random_state=42):
     create_labels(df=df)
     
     plot_dataset_all(df=df[ai_features])
-    #plot_dataset_chart(df=df[user_features + ["Label"]])
+    plot_dataset_chart(df=df[user_features + ["Label"]])
 
     # label encoding
     encoder_name = preprocessing.LabelEncoder()
     df['Label'] = encoder_name.fit_transform(df["Label"])
 
     # ambil hanya feature yg penting
-    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce").dropna(axis=0)
+    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna(axis=0)
     
     labels = df['Label'].values
     features = df.drop(columns=["Label"]).values
 
     # Apply balancing technique
-    features_balanced, labels_balanced = balance_data(
-        features, labels, method=balance_method, random_state=random_state
-    )
+    features_balanced, labels_balanced = balance_data(features, labels, method=balance_method, random_state=random_state)
     
     return features_balanced, labels_balanced, encoder_name
 
