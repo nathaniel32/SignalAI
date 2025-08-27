@@ -1,4 +1,3 @@
-import json
 import torch
 import numpy as np
 import pandas as pd
@@ -8,7 +7,6 @@ from torchmetrics import ConfusionMatrix
 from mlxtend.plotting import plot_confusion_matrix
 import matplotlib.pyplot as plt
 import mplfinance as mpf
-import matplotlib.dates as mdates
 from sklearn.utils import resample
 from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
