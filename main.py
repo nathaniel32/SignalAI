@@ -14,6 +14,7 @@ class Main:
             ('Import CSV', lambda: self.import_csv_to_database()),
             ('Train AI', lambda: self.trainer.main(df=self.data_manager.get_data())),
             ('Predict Signal', lambda: self.predict()),
+            ('Etoro Data', lambda: self.data_manager.import_json_to_database_etoro(market_id=28)),
         ]
 
     def import_csv_to_database(self):

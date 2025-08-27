@@ -8,7 +8,7 @@ class TMarket(model_base):
     __tablename__ = 't_market'
 
     id = Column(Integer, primary_key=True)
-    symbol = Column(String(10), nullable=False)
+    symbol = Column(String(10))
 
     prices = relationship("TPrice", back_populates="market", cascade="all, delete-orphan")
 

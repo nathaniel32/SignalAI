@@ -1,6 +1,6 @@
 CREATE TABLE t_market (
     id INTEGER PRIMARY KEY,
-    symbol VARCHAR(10) NOT NULL
+    symbol VARCHAR(10)
 );
 
 CREATE TABLE t_price (

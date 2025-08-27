@@ -20,10 +20,10 @@ class Trainer:
         try:
             features, labels, encoder_labels = utils.prepare_data(df)
             
-            logging.info(features.shape)
-            logging.info(features)
-            logging.info(labels)
-            logging.info(encoder_labels.classes_)
+            logging.debug(features.shape)
+            logging.debug(features)
+            logging.debug(labels)
+            logging.debug(encoder_labels.classes_)
 
             if len(features) > 1:
                 train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels
@@ -40,7 +40,7 @@ class Trainer:
                                                 shuffle=False,
                                                 pin_memory=True)
                 
-                logging.info("\nTrain data: %d\nVal data: %d\nTrain labels: %d\nVal labels: %d", len(train_data), len(val_data), len(train_labels), len(val_labels))
+                logging.info("\n\nTrain data: %d\nVal data: %d\nTrain labels: %d\nVal labels: %d", len(train_data), len(val_data), len(train_labels), len(val_labels))
             
                 device = config.DEVICE 
                 model = nn_model.Model(
@@ -76,7 +76,7 @@ class Trainer:
                 best_preds_array = []
                 best_solution_array = []
 
-                print("=" * 10)
+                print("=" * 20)
                 print("Device: " + str(device))
                 print(f'Training Data: {len(train_data)}')
                 print(f'Validation Data: {len(val_data)}')

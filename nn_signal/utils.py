@@ -57,7 +57,8 @@ def plot_dataset_chart(df, filename="data/chart.png"):
         type='candle',
         style=s,
         ax=ax1,
-        ylabel='Price'
+        ylabel='Price',
+        warn_too_much_data=len(df_plot)+1
     )
     
     ax1.set_title("Candlestick Chart", fontsize=14, fontweight='bold')
@@ -162,8 +163,6 @@ class DatasetManager(torch.utils.data.Dataset):
 
 def create_labels(df):
     # Label
-    THRESHOLD_LABEL = 0.001  # 0.1% ambang batas
-
     # Geser harga close ke depan
     df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
 
@@ -172,7 +171,7 @@ def create_labels(df):
 
     # Buat label berdasarkan aturan
     def create_label(x):
-        if x > THRESHOLD_LABEL:
+        if x > config.THRESHOLD_LABEL:
             return "BUY"
         elif x < -config.THRESHOLD_LABEL:
             return "SELL"
@@ -276,12 +275,14 @@ def create_advanced_features(df):
     
     if "volume" in df.columns:
         # Volume change percentage
-        df["Volume_Change_Pct"] = df["volume"].pct_change() * 100
+        df["Volume_Change_Pct"] = np.where(df["volume"] == 0, 0, df["volume"].pct_change() * 100)
+        #df["Volume_Change_Pct"] = df["volume"].pct_change() * 100
         
         # Volume moving average deviation
         df["Volume_MA_5"] = df["volume"].rolling(5).mean()
-        df["Volume_MA_Deviation_Pct"] = (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100
-    
+        df["Volume_MA_Deviation_Pct"] = np.where(df["volume"] == 0, 0, (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100)
+        #df["Volume_MA_Deviation_Pct"] = (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100
+        df["Volume_Flag"] = np.where(df["volume"] == 0, 0, 1)
     # ===== TREND STRENGTH INDICATORS =====
     
     # Price momentum over different periods
@@ -310,8 +311,8 @@ def create_advanced_features(df):
     # ===== User features =====
     user_features = ["open", "high", "low", "close", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
     
-    """ if "Volume_MA_5" in df.columns:
-        user_features.append("Volume_MA_5") """
+    if "volume" in df.columns:
+        user_features.append("Volume_MA_5")
     
     #df = df.drop(columns=[col for col in user_features if col in df.columns])
     
@@ -334,15 +335,31 @@ def create_advanced_features(df):
     ]
     
     # volume features
-    if "Volume_Change_Pct" in df.columns:
-        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct"])
-        
+    if "volume" in df.columns:
+        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_Flag"])
+
     return user_features, ai_features
+
+def print_table_info(df, title):
+    print("\n", title)
+    
+    print(df)
+    
+    label_counts = df['Label'].value_counts()
+    print(label_counts)
 
 def prepare_data(df, balance_method='smote', random_state=42):
     user_features, ai_features = create_advanced_features(df=df)
     create_labels(df=df)
+    # print(df[["volume", "Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_MA_5", "Volume_Flag"]].tail(50))
     
+    print_table_info(df, "Original Data")
+
+    # hapus yg nan, inf
+    df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+    
+    print_table_info(df, "Cleaned Original Data")
+
     plot_dataset_all(df=df[ai_features])
     plot_dataset_chart(df=df[user_features + ["Label"]])
 
@@ -351,7 +368,7 @@ def prepare_data(df, balance_method='smote', random_state=42):
     df['Label'] = encoder_name.fit_transform(df["Label"])
 
     # ambil hanya feature yg penting
-    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce")
     
     labels = df['Label'].values
     features = df.drop(columns=["Label"]).values

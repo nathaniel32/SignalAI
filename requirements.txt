@@ -10,3 +10,4 @@ imbalanced-learn
 sqlalchemy
 dotenv
 psycopg2
+requests

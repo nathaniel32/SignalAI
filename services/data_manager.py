@@ -2,8 +2,9 @@ from sqlalchemy import text
 from database.connection import Connection
 import pandas as pd
 from database.model import TMarket, TPrice
-from datetime import datetime, time
+from datetime import datetime
 from sqlalchemy.exc import IntegrityError
+import requests
 
 class DataManager:
     def __init__(self):
@@ -44,6 +45,7 @@ class DataManager:
                 self.session.add(market_query)
                 self.session.commit()
 
+            print("Importing...")
             for idx, row in df.iterrows():
                 try:
                     # ISO8601
@@ -65,14 +67,65 @@ class DataManager:
                     volume=row[volume_column] if pd.notnull(row[volume_column]) else 0,
                     adjusted_close=row[adjusted_close_column]
                 )
-                self.session.add(price)
+                self.session.merge(price)
+                """ self.session.add(price)
                 try:
                     self.session.commit()
                 except IntegrityError:
                     self.session.rollback()
+                    print("Duplicate") """
+                
+            self.session.commit()
         except Exception as e:
             self.session.rollback()
             print("Error importing CSV:", e)
+
+    def import_json_to_database_etoro(self, market_id):
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+            "Accept": "application/json"
+        }
+        period = 60
+        try:
+            target_url = f"https://candle.etoro.com/candles/asc.json/OneMinute/1001/{market_id}/"
+            response = requests.get(f"{target_url}", proxies=None, headers=headers)
+            data_json = response.json()
+            candles = data_json["Candles"][0]["Candles"]
+            
+            market_query = self.session.query(TMarket).filter_by(id=market_id).first()
+            if not market_query:
+                target_url = f"https://www.etoro.com/sapi/instrumentsinfo/instruments/{market_id}/"
+                response = requests.get(f"{target_url}", proxies=None, headers=headers)
+                data_json = response.json()
+                market_symbol = data_json["internalSymbolFull"]
+                market_query = TMarket(id=market_id, symbol=market_symbol)
+                self.session.add(market_query)
+                self.session.commit()
+            
+            print("Importing...")
+            for candle in candles:
+                price = TPrice(
+                    market_id=market_id,
+                    period=period,
+                    timestamp=candle['FromDate'],
+                    open=candle['Open'],
+                    high=candle['High'],
+                    low=candle['Low'],
+                    close=candle['Close'],
+                    volume=candle['Volume']
+                )
+                self.session.merge(price)
+                """ self.session.add(price)
+                try:
+                    self.session.commit()
+                    print("OK")
+                except IntegrityError:
+                    self.session.rollback()
+                    print("Duplicate") """
+            self.session.commit()
+        except Exception as e:
+            self.session.rollback()
+            print("Error:", e)
 
     def get_data(self):
         query = self.session.query(TPrice).all()
@@ -91,6 +144,9 @@ class DataManager:
         for col in ["open", "high", "low", "close", "volume", "adjusted_close"]:
             if col in df.columns:
                 df[col] = df[col].astype(float)
+
+                if col in ["volume", "adjusted_close"]:
+                    df[col] = df[col].fillna(0)
         
         return df
 
