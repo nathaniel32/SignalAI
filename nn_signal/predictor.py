@@ -37,17 +37,12 @@ class Predictor:
         class_scores, class_preds = utils.to_yhat(logits)
         return class_preds, [self.encoder_labels.classes_, class_scores[0]]
                 
-    def main(self):
-        with open(config.DATASET_PATH, "r") as f:
-            data = json.load(f)
-
-        candles = data["Candles"][0]["Candles"]
-        df = pd.DataFrame(candles)
-        df["FromDate"] = pd.to_datetime(df["FromDate"])
-        df.set_index("FromDate", inplace=True)
-
+    def main(self, df):
+        
+        print(df)
         _, ai_features = utils.create_advanced_features(df=df)
 
+        print(df)
         df = df[ai_features].apply(pd.to_numeric, errors="coerce").dropna(axis=0)
         
         # last row

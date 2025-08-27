@@ -170,13 +170,13 @@ def create_labels(df):
     df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
 
     # Buat label berdasarkan aturan
-    def create_label(x):
+    def create_label(x, hold=True):
         if x > config.THRESHOLD_LABEL:
             return "BUY"
         elif x < -config.THRESHOLD_LABEL:
             return "SELL"
         else:
-            return "HOLD"
+            return "HOLD" if hold else None
 
     df["Label"] = df["Future_Return"].apply(create_label)
 

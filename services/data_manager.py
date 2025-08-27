@@ -34,6 +34,14 @@ class DataManager:
             self.session.rollback()
             print(f"Failed to drop tables: {e}")
 
+    def fill_column(self, df):
+        for col in ["open", "high", "low", "close", "volume", "adjusted_close"]:
+            if col in df.columns:
+                df[col] = df[col].astype(float)
+
+                if col in ["volume", "adjusted_close"]:
+                    df[col] = df[col].fillna(0)
+
     def import_csv_to_database(self, file_path, market_id, symbol, period, date_column, open_column, high_column, low_column, close_column, volume_column, adjusted_close_column, sep=","):
         try:
             df = pd.read_csv(file_path, sep=sep, parse_dates=[date_column], dayfirst=True)
@@ -141,12 +149,7 @@ class DataManager:
         df.set_index('timestamp', inplace=True)
         df = df.sort_index()
         
-        for col in ["open", "high", "low", "close", "volume", "adjusted_close"]:
-            if col in df.columns:
-                df[col] = df[col].astype(float)
-
-                if col in ["volume", "adjusted_close"]:
-                    df[col] = df[col].fillna(0)
+        self.fill_column(df)
         
         return df
 
