@@ -86,6 +86,11 @@ class DataManager:
 
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df.set_index('timestamp', inplace=True)
+        df = df.sort_index()
+        
+        for col in ["open", "high", "low", "close", "volume", "adjusted_close"]:
+            if col in df.columns:
+                df[col] = df[col].astype(float)
         
         return df
 

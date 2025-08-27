@@ -35,9 +35,7 @@ def plot_dataset_chart(df):
     s  = mpf.make_mpf_style(marketcolors=mc)
 
     # plot candlestick
-    fig, ax = mpf.plot(df, type="candle", style=s,
-                       ylabel="Price",
-                       returnfig=True, figsize=(18,8))
+    fig, ax = mpf.plot(df, type="candle", style=s, ylabel="Price", returnfig=True, figsize=(18,8))
 
     # scatter label
     for label, color in colors.items():
@@ -46,8 +44,8 @@ def plot_dataset_chart(df):
         ax[0].scatter(idx, price, label=label, color=color, s=30, marker="o")
 
     # x-axis = date
-    ax[0].xaxis_date()
-    ax[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M:%S"))
+    # ax[0].xaxis_date()
+    ax[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M"))
     fig.autofmt_xdate() # rotate
 
     ax[0].legend()
@@ -148,12 +146,12 @@ def create_labels(df):
     df["Label"] = df["Future_Return"].apply(create_label)
 
 def create_advanced_features(df):
-    df["open"] =df["open"].astype(float)
-    df["close"] =df["close"].astype(float)
-    df["low"] =df["low"].astype(float)
-    df["high"] =df["high"].astype(float)
-    df["volume"] =df["volume"].astype(float)
-    df["adjusted_close"] =df["adjusted_close"].astype(float)
+    #df["open"] =df["open"].astype(float)
+    #df["close"] =df["close"].astype(float)
+    #df["low"] =df["low"].astype(float)
+    #df["high"] =df["high"].astype(float)
+    #df["volume"] =df["volume"].astype(float)
+    #df["adjusted_close"] =df["adjusted_close"].astype(float)
     
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
