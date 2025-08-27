@@ -52,14 +52,12 @@ class DataManager:
                     # fallback YYYY-MM-DD
                     dt = datetime.strptime(str(row[date_column]), "%Y-%m-%d")
                 
-                data_date = dt.date()
-                data_time = dt.time() if dt.time() != time(0, 0) else None
+                timestamp = dt.date()
 
                 price = TPrice(
                     market_id=market_id,
                     period=period,
-                    data_date=data_date,
-                    data_time=data_time,
+                    timestamp=timestamp,
                     open=row[open_column],
                     high=row[high_column],
                     low=row[low_column],
@@ -86,8 +84,8 @@ class DataManager:
 
         df = pd.DataFrame(data)
 
-        df['data_date'] = pd.to_datetime(df['data_date'])
-        df.set_index('data_date', inplace=True)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
         
         return df
 

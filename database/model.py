@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Date, Time, ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import Column, Integer, String, Numeric, Date, Time, ForeignKey, PrimaryKeyConstraint, DateTime
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import time
 
@@ -17,8 +17,7 @@ class TPrice(model_base):
 
     market_id = Column(Integer, ForeignKey('t_market.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False)
     period = Column(Integer, nullable=False)
-    data_date = Column(Date, nullable=False)
-    data_time = Column(Time(0), nullable=False, default=time(0, 0))
+    timestamp = Column(DateTime, nullable=False)
     open = Column(Numeric(18,8), nullable=False)
     high = Column(Numeric(18,8), nullable=False)
     low = Column(Numeric(18,8), nullable=False)
@@ -27,7 +26,7 @@ class TPrice(model_base):
     adjusted_close = Column(Numeric(18,8))
 
     __table_args__ = (
-        PrimaryKeyConstraint('market_id', 'period', 'data_date', 'data_time', name='pk_t_price'),
+        PrimaryKeyConstraint('market_id', 'period', 'timestamp', name='pk_t_price'),
     )
 
     market = relationship("TMarket", back_populates="prices")
