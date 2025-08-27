@@ -24,33 +24,71 @@ def plot_dataset_all(df):
     plt.savefig("data/dataset.png")
     plt.close()
 
-def plot_dataset_chart(df):
-    # index datetime
-    # df.index = pd.to_datetime(df.index)
-
+def plot_dataset_chart(df, filename="data/chart.png"):
+    df_plot = df.copy()
     colors = {"BUY": "green", "SELL": "red", "HOLD": "blue"}
 
-    # market colors
-    mc = mpf.make_marketcolors(up="g", down="r", inherit=True)
-    s  = mpf.make_mpf_style(marketcolors=mc)
+    # Data preparation
+    if not isinstance(df_plot.index, pd.DatetimeIndex):
+        df_plot.index = pd.to_datetime(df_plot.index)
+    df_plot.index = df_plot.index.tz_localize(None)
+    df_plot = df_plot.sort_index()
 
-    # plot candlestick
-    fig, ax = mpf.plot(df, type="candle", style=s, ylabel="Price", returnfig=True, figsize=(18,8))
+    df_plot.rename(columns={
+        'open': 'Open', 
+        'high': 'High',
+        'low': 'Low', 
+        'close': 'Close'
+    }, inplace=True)
 
-    # scatter label
+    df_plot = df_plot.dropna(subset=['Open','High','Low','Close'])
+
+    # figure
+    fig = plt.figure(figsize=(26, 12))
+    
+    # SUBPLOT 1: CANDLESTICK CHART
+    ax1 = plt.subplot(2, 1, 1)
+    
+    # Market colors
+    mc = mpf.make_marketcolors(up='g', down='r', inherit=True)
+    s = mpf.make_mpf_style(marketcolors=mc)
+    
+    # Plot candlestick
+    mpf.plot(
+        df_plot[['Open','High','Low','Close']],
+        type='candle',
+        style=s,
+        ax=ax1,
+        ylabel='Price'
+    )
+    
+    ax1.set_title("Candlestick Chart", fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # SUBPLOT 2: SCATTER PLOT SIGNALS
+    ax2 = plt.subplot(2, 1, 2, sharex=ax1)
+    
+    # Plot close price
+    positions = np.arange(len(df_plot))
+    ax2.plot(positions, df_plot['Close'].values, color='gray', alpha=0.3, linewidth=1, label='Close Price')
+    
+    # Scatter plot
     for label, color in colors.items():
-        idx = df[df["Label"] == label].index
-        price = df.loc[idx, "close"]
-        ax[0].scatter(idx, price, label=label, color=color, s=30, marker="o")
-
-    # x-axis = date
-    # ax[0].xaxis_date()
-    ax[0].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M"))
-    fig.autofmt_xdate() # rotate
-
-    ax[0].legend()
-    plt.title("Candlestick + BUY/SELL/HOLD")
-    plt.savefig("data/chart.png")
+        mask = df_plot["Label"] == label
+        positions_label = np.where(mask)[0]
+        prices_label = df_plot.loc[mask, "Close"].values
+        
+        ax2.scatter(positions_label, prices_label, label=f'{label} Signal', color=color, s=60, marker='o', alpha=0.8, edgecolors='black', linewidth=0.5)
+    
+    ax2.set_title("Trading Signals", fontsize=14, fontweight='bold')
+    ax2.set_ylabel('Price')
+    ax2.set_xlabel('Time Index')
+    ax2.legend(loc='upper left')
+    ax2.grid(True, alpha=0.3)
+    
+    # Format dan styling
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches='tight')
     plt.close()
 
 def show_conf_matrix(preds_array, solution_array, label, title, binary=False, plot=False):
