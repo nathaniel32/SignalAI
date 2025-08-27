@@ -70,6 +70,7 @@ class Trainer:
                         print(f"\nError loading model for retraining: {e}")
 
                 optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
 
                 best_loss = float('inf')
                 best_epochs = 1
@@ -87,7 +88,9 @@ class Trainer:
                 for epoch in range(config.EPOCHS):
                     train_loss = utils.train_fn(train_data_loader, model, optimizer, device)
                     val_loss, preds_array, solution_array = utils.val_fn(val_data_loader, model, device)
-
+                    
+                    scheduler.step(val_loss)
+                    
                     print(f'\n== Epoch {epoch + 1}/{config.EPOCHS}')
                     print(f'Train Loss: {train_loss}')
                     print(f'Validation Loss: {val_loss}')

@@ -302,7 +302,28 @@ def create_advanced_features(df):
     df["Lower_Shadow_Ratio"] = lower_shadow / body_size
     
     # ===== User features =====
-    user_features = ["open", "high", "low", "close", "RSI_14", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
+    user_features = [
+        "open", 
+        "high", 
+        "low", 
+        "close", 
+        "RSI_14", 
+        "H-L", 
+        "H-C", 
+        "L-C", 
+        "TR", 
+        "SMA_5", 
+        "SMA_10", 
+        "SMA_20", 
+        "EMA_5", 
+        "EMA_12", 
+        "STDDEV_20", 
+        "UpperBB", 
+        "LowerBB", 
+        "MACD", 
+        "Signal", 
+        "ATR_14"
+    ]
     
     if "volume" in df.columns:
         user_features.append("Volume_MA_5")
