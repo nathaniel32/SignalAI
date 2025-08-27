@@ -181,13 +181,6 @@ def create_labels(df):
     df["Label"] = df["Future_Return"].apply(create_label)
 
 def create_advanced_features(df):
-    #df["open"] =df["open"].astype(float)
-    #df["close"] =df["close"].astype(float)
-    #df["low"] =df["low"].astype(float)
-    #df["high"] =df["high"].astype(float)
-    #df["volume"] =df["volume"].astype(float)
-    #df["adjusted_close"] =df["adjusted_close"].astype(float)
-    
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
     # Hourly price change percentage
@@ -309,7 +302,7 @@ def create_advanced_features(df):
     df["Lower_Shadow_Ratio"] = lower_shadow / body_size
     
     # ===== User features =====
-    user_features = ["open", "high", "low", "close", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
+    user_features = ["open", "high", "low", "close", "RSI_14", "H-L", "H-C", "L-C", "TR", "SMA_5", "SMA_10", "SMA_20", "EMA_5", "EMA_12", "STDDEV_20", "UpperBB", "LowerBB", "MACD", "Signal", "ATR_14"]
     
     if "volume" in df.columns:
         user_features.append("Volume_MA_5")
@@ -332,6 +325,14 @@ def create_advanced_features(df):
         "Momentum_5",                 # Medium momentum
         "Up_Periods_5",               # Trend consistency
         "Doji_Pattern",               # Pattern recognition
+        "Signal_Pct",
+        "Down_Periods_5",
+        "Momentum_10",
+        "MACD_Pct",
+        "BB_Upper_Distance_Pct",
+        "BB_Lower_Distance_Pct",
+        "Upper_Shadow_Ratio",
+        "Lower_Shadow_Ratio"
     ]
     
     # volume features
