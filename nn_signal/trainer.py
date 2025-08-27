@@ -27,8 +27,9 @@ class Trainer:
 
             if len(features) > 1:
                 train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels
-            
-                train_dataset = utils.DatasetManager(features=train_data, labels=train_labels, sequence_length=config.SEQUENCE_LENGTH)
+
+                train_data_balanced, train_labels_balanced =  utils.balance_data(train_data, train_labels, method='smote', random_state=42)
+                train_dataset = utils.DatasetManager(features=train_data_balanced, labels=train_labels_balanced, sequence_length=config.SEQUENCE_LENGTH)
                 train_data_loader = DataLoader( dataset=train_dataset,
                                                 batch_size=config.TRAIN_BATCH_SIZE,
                                                 shuffle=True,
@@ -79,7 +80,7 @@ class Trainer:
 
                 print("=" * 20)
                 print("Device: " + str(device))
-                print(f'Training Data: {len(train_data)}')
+                print(f'Training Data Balanced: {len(train_data_balanced)}')
                 print(f'Validation Data: {len(val_data)}')
                 print(f'Total Data: {len(features)}')
 

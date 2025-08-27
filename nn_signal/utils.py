@@ -370,7 +370,7 @@ def print_table_info(df, title):
     label_counts = df['Label'].value_counts()
     print(label_counts)
 
-def prepare_data(df, balance_method='smote', random_state=42):
+def prepare_data(df):
     user_features, ai_features = create_advanced_features(df=df)
     create_labels(df=df)
     # print(df[["volume", "Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_MA_5", "Volume_Flag"]].tail(50))
@@ -394,11 +394,8 @@ def prepare_data(df, balance_method='smote', random_state=42):
     
     labels = df['Label'].values
     features = df.drop(columns=["Label"]).values
-
-    # Apply balancing technique
-    features_balanced, labels_balanced = balance_data(features, labels, method=balance_method, random_state=random_state)
     
-    return features_balanced, labels_balanced, encoder_name
+    return features, labels, encoder_name
 
 def balance_data(features, labels, method, random_state):
     if method == 'smote':
