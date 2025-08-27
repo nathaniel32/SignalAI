@@ -7,7 +7,6 @@ import numpy as np
 class Main:
     def __init__(self):
         self.data_manager = DataManager()
-        self.predictor = Predictor(config.TRAINED_PATH)
         self.trainer = Trainer()
         self.menu_items = [
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
@@ -25,7 +24,8 @@ class Main:
         self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column="Date", open_column="Open", high_column="High", low_column="Low", close_column="Close", volume_column="Volume", adjusted_close_column="Adjusted Close")
     
     def predict(self):
-        pred_index, (classes, probs) = self.predictor.main()
+        predictor = Predictor(config.TRAINED_PATH)
+        pred_index, (classes, probs) = predictor.main()
         sorted_idx = np.argsort(probs)[::-1]
         print("Hasil prediksi:")
         for i in sorted_idx:
