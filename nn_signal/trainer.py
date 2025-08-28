@@ -79,7 +79,7 @@ class Trainer:
 
                 criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
                 optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, verbose=True)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5)
 
                 best_loss = float('inf')
                 best_epochs = 1

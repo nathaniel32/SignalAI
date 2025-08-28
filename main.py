@@ -25,9 +25,14 @@ class Main:
         self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column="Date", open_column="Open", high_column="High", low_column="Low", close_column="Close", volume_column="Volume", adjusted_close_column="Adjusted Close")
     
     def predict(self):
-        #self.data_manager.import_json_to_database_etoro(market_id=28)
         predictor = Predictor(config.TRAINED_PATH)
-        pred_index, (classes, probs) = predictor.main(df=self.data_manager.get_data())
+
+        #self.data_manager.import_json_to_database_etoro(market_id=28)
+        market_id = input("Market ID: ")
+        period = input("Period: ")
+        df = self.data_manager.get_data(market_id=market_id, period=period)
+        
+        pred_index, (classes, probs) = predictor.main(df=df, market_id=market_id, period=period)
         
         sorted_idx = np.argsort(probs)[::-1]
         print("Results:")

@@ -5,6 +5,7 @@ from database.model import TMarket, TPrice
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 import requests
+from sqlalchemy import and_
 
 class DataManager:
     def __init__(self):
@@ -63,7 +64,8 @@ class DataManager:
                     dt = datetime.strptime(str(row[date_column]), "%Y-%m-%d")
                 
                 timestamp = dt.date()
-
+                print(timestamp)
+                
                 price = TPrice(
                     market_id=market_id,
                     period=period,
@@ -112,6 +114,7 @@ class DataManager:
             
             print("Importing...")
             for candle in candles:
+                print(candle['FromDate'])
                 price = TPrice(
                     market_id=market_id,
                     period=period,
@@ -135,9 +138,20 @@ class DataManager:
             self.session.rollback()
             print("Error:", e)
 
-    def get_data(self):
-        query = self.session.query(TPrice).all()
-
+    def get_data(self, market_id=None, period=None):            
+        if market_id and period:
+            query = (
+                self.session.query(TPrice)
+                .filter(
+                    and_(
+                        TPrice.market_id == market_id,
+                        TPrice.period == period
+                    )
+                ).all()
+            )
+        else:
+            query = self.session.query(TPrice).all()
+        
         data = [
             {c.name: getattr(row, c.name) for c in row.__table__.columns}
             for row in query
@@ -151,5 +165,6 @@ class DataManager:
         
         self.fill_column(df)
         
+        print(df)
         return df
 
