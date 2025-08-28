@@ -8,9 +8,7 @@ import nn_signal.utils as utils
 import nn_signal.model as nn_model
 import config
 from torchinfo import summary
-import logging
-
-logging.basicConfig(level=logging.INFO)
+import numpy as np
 
 class Trainer:
     def __init__(self):
@@ -18,50 +16,55 @@ class Trainer:
 
     def main(self, df):
         try:
-            features, labels, encoder_labels = utils.prepare_data(df)
-            
-            logging.debug(features.shape)
-            logging.debug(features)
-            logging.debug(labels)
-            logging.debug(encoder_labels.classes_)
+            prepared_data, encoders = utils.prepare_data(df)
 
-            if len(features) > 1:
-                train_data, val_data, train_labels, val_labels = train_test_split(features, labels, test_size=0.2, random_state=42, stratify=labels) #stratify=labels
+            X_sequences, X_market_ids_encoded, X_periods_encoded, Y_labels_encoded = prepared_data
+            encoder_market_ids, encoder_periods, encoder_labels = encoders
+       
+            print("Markets:", encoder_market_ids.classes_)
+            print("Periods:", encoder_periods.classes_)
+            print("Labels:", encoder_labels.classes_)
 
-                train_data_balanced, train_labels_balanced =  utils.balance_data(train_data, train_labels, method='smote', random_state=42)
-                train_dataset = utils.DatasetManager(features=train_data_balanced, labels=train_labels_balanced, sequence_length=config.SEQUENCE_LENGTH)
-                train_data_loader = DataLoader( dataset=train_dataset,
-                                                batch_size=config.TRAIN_BATCH_SIZE,
-                                                shuffle=True,
-                                                pin_memory=True)
-                
-                val_dataset = utils.DatasetManager(features=val_data, labels=val_labels, sequence_length=config.SEQUENCE_LENGTH)
-                val_data_loader = DataLoader(   dataset=val_dataset,
-                                                batch_size=config.VALIDATION_BATCH_SIZE,
-                                                shuffle=False,
-                                                pin_memory=True)
-                
-                logging.info("\n\nTrain data: %d\nVal data: %d\nTrain labels: %d\nVal labels: %d", len(train_data), len(val_data), len(train_labels), len(val_labels))
-            
-                device = config.DEVICE 
-                model = nn_model.Model(
-                    input_size=features.shape[1],
-                    hidden_size=config.HIDDEN_SIZE,
-                    num_layers=config.NUM_LAYERS,
-                    dropout=config.DROPOUT,
-                    num_classes=len(encoder_labels.classes_)
+            meta_data = {
+                'encoder_market_ids': encoder_market_ids,
+                "encoder_periods": encoder_periods,
+                "encoder_labels": encoder_labels
+            }
+            joblib.dump(meta_data, config.META_PATH)
+
+            if len(X_sequences) > 1:
+                # Split data
+                indices = np.arange(len(X_sequences))
+                train_idx, val_idx = train_test_split(
+                    indices, test_size=0.2, random_state=42, stratify=Y_labels_encoded
                 )
-                model.to(device)
+                
+                train_dataset = utils.DatasetManager(
+                    X_sequences[train_idx], X_market_ids_encoded[train_idx],
+                    X_periods_encoded[train_idx], Y_labels_encoded[train_idx]
+                )
 
-                meta_data = {
-                    'encoder_labels': encoder_labels,
-                    "input_size": features.shape[1],
-                    "hidden_size": config.HIDDEN_SIZE,
-                    "num_layers": config.NUM_LAYERS,
-                    "dropout": config.DROPOUT,
-                    "num_classes": len(encoder_labels.classes_)
-                }
-                joblib.dump(meta_data, config.META_PATH)
+                val_dataset = utils.DatasetManager(
+                    X_sequences[val_idx], X_market_ids_encoded[val_idx],
+                    X_periods_encoded[val_idx], Y_labels_encoded[val_idx]
+                )
+
+                train_loader = DataLoader(dataset=train_dataset,
+                                            batch_size=config.TRAIN_BATCH_SIZE,
+                                            shuffle=True,
+                                            pin_memory=True)
+                
+                val_loader = DataLoader(dataset=val_dataset,
+                                        batch_size=config.VALIDATION_BATCH_SIZE,
+                                        shuffle=False,
+                                        pin_memory=True)
+                            
+                n_markets = len(encoder_market_ids.classes_)
+                n_periods = len(encoder_periods.classes_)
+                model = nn_model.Model(n_markets, n_periods).to(config.DEVICE)
+
+                total_params = sum(p.numel() for p in model.parameters())
+                print(total_params)
 
                 if config.RETRAIN_MODEL:
                     try:
@@ -70,8 +73,13 @@ class Trainer:
                     except Exception as e:
                         print(f"\nError loading model for retraining: {e}")
 
+                class_counts = np.bincount(Y_labels_encoded)
+                class_weights = len(Y_labels_encoded) / (len(class_counts) * class_counts)
+                class_weights = torch.FloatTensor(class_weights).to(config.DEVICE)
+
+                criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
                 optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, verbose=True)
 
                 best_loss = float('inf')
                 best_epochs = 1
@@ -79,16 +87,16 @@ class Trainer:
                 best_solution_array = []
 
                 print("=" * 20)
-                print("Device: " + str(device))
-                print(f'Training Data Balanced: {len(train_data_balanced)}')
-                print(f'Validation Data: {len(val_data)}')
-                print(f'Total Data: {len(features)}')
+                print("Device: " + str(config.DEVICE))
+                print(f'Training Data: {len(train_idx)}')
+                print(f'Validation Data: {len(val_idx)}')
+                print(f'Total Data: {len(indices)}')
 
                 start_time = time.time()
 
                 for epoch in range(config.EPOCHS):
-                    train_loss = utils.train_fn(train_data_loader, model, optimizer, device)
-                    val_loss, preds_array, solution_array = utils.val_fn(val_data_loader, model, device)
+                    train_loss = utils.train_fn(train_loader, model, optimizer, criterion)
+                    val_loss, preds_array, solution_array = utils.val_fn(val_loader, model, criterion)
                     
                     scheduler.step(val_loss)
                     
@@ -115,8 +123,8 @@ class Trainer:
                 print(f"\nTraining duration: {trainingsdauer:.2f} minutes")
 
                 utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | AI", plot=True)
-                summary(model, input_size=(config.TRAIN_BATCH_SIZE, config.SEQUENCE_LENGTH, features.shape[1]))
+                summary(model, input_size=(config.TRAIN_BATCH_SIZE, config.SEQUENCE_LENGTH, X_sequences.shape[1]))
             else:
-                print("\n!!!Too little features to train AI!!!")
+                print("\n!!!Too little X_sequences to train AI!!!")
         except Exception as e:
             raise FileNotFoundError(f"\nError in the training process")

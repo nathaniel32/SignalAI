@@ -1,109 +1,64 @@
 import torch.nn as nn
+import torch
 
 class Model(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, dropout, num_classes):
+    def __init__(self, n_markets, n_periods, sequence_length=20, n_features=4, 
+                 market_embedding_dim=16, period_embedding_dim=8, 
+                 lstm_hidden=64, lstm_layers=2):
         super(Model, self).__init__()
         
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.num_classes = num_classes
+        self.sequence_length = sequence_length
+        self.n_features = n_features
+        self.lstm_hidden = lstm_hidden
         
-        # Normalization
-        self.input_norm = nn.LayerNorm(input_size)
+        # Dual embedding
+        self.market_embedding = nn.Embedding(n_markets, market_embedding_dim)
+        self.period_embedding = nn.Embedding(n_periods, period_embedding_dim)
         
-        # LSTM layers
+        # LSTM untuk sequence processing
         self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            dropout=dropout if num_layers > 1 else 0.0,  # No dropout for single layer
+            input_size=n_features,
+            hidden_size=lstm_hidden,
+            num_layers=lstm_layers,
             batch_first=True,
-            bidirectional=True
+            dropout=0.2 if lstm_layers > 1 else 0
         )
         
-        # Self-attention with residual connection
-        self.attention = nn.MultiheadAttention(
-            embed_dim=hidden_size * 2,  # *2 for bidirectional
-            num_heads=4,  # Reduced from 8 to prevent overfitting
-            dropout=dropout * 0.5,  # Lighter dropout in attention
-            batch_first=True
-        )
+        # Dense layers
+        combined_embedding_dim = market_embedding_dim + period_embedding_dim
+        self.fc1 = nn.Linear(lstm_hidden + combined_embedding_dim, 128)
+        self.dropout1 = nn.Dropout(0.3)
+        self.fc2 = nn.Linear(128, 64)
+        self.dropout2 = nn.Dropout(0.2)
+        self.fc3 = nn.Linear(64, 32)
+        self.dropout3 = nn.Dropout(0.1)
+        self.fc4 = nn.Linear(32, 3)  # BUY, SELL, HOLD
         
-        # Attention output normalization
-        self.attn_norm = nn.LayerNorm(hidden_size * 2)
+        self.relu = nn.ReLU()
+        self.leaky_relu = nn.LeakyReLU(0.1)
         
-        # Global pooling
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
+    def forward(self, sequence, market_id, period):
+        batch_size = sequence.size(0)
         
-        # Feature extraction with residual connections
-        self.feature_extractor = nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size),
-            nn.BatchNorm1d(hidden_size),  # BatchNorm
-            nn.GELU(),  # GELU instead of ReLU
-            nn.Dropout(dropout * 0.5),
-            
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.BatchNorm1d(hidden_size // 2),
-            nn.GELU(),
-            nn.Dropout(dropout * 0.3)
-        )
+        # LSTM processing
+        lstm_out, (hidden, cell) = self.lstm(sequence)
+        # Take last output
+        lstm_out = lstm_out[:, -1, :]  # (batch_size, lstm_hidden)
         
-        # Classification head
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_size // 2, hidden_size // 4),
-            nn.BatchNorm1d(hidden_size // 4),
-            nn.GELU(),
-            nn.Dropout(dropout * 0.2),
-            nn.Linear(hidden_size // 4, num_classes)
-        )
+        # Dual embedding
+        market_emb = self.market_embedding(market_id)    # (batch_size, market_embedding_dim)
+        period_emb = self.period_embedding(period)       # (batch_size, period_embedding_dim)
         
-        # Initialize weights
-        self.apply(self._init_weights)
-    
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            # Xavier initialization with gain
-            nn.init.xavier_uniform_(module.weight, gain=nn.init.calculate_gain('relu'))
-            if module.bias is not None:
-                nn.init.constant_(module.bias, 0.1)  # Small positive bias
-        elif isinstance(module, nn.LSTM):
-            for name, param in module.named_parameters():
-                if 'weight_ih' in name:
-                    nn.init.xavier_uniform_(param)
-                elif 'weight_hh' in name:
-                    nn.init.orthogonal_(param)  # Orthogonal for recurrent weights
-                elif 'bias' in name:
-                    nn.init.constant_(param, 0)
-                    # Set forget gate bias to 1
-                    n = param.size(0)
-                    param.data[n//4:n//2].fill_(1.0)
-        elif isinstance(module, (nn.BatchNorm1d, nn.LayerNorm)):
-            nn.init.constant_(module.weight, 1.0)
-            nn.init.constant_(module.bias, 0.0)
-    
-    def forward(self, x):
-        batch_size, seq_len, input_size = x.size()
+        # Concatenate semua features
+        combined = torch.cat([lstm_out, market_emb, period_emb], dim=1)
         
-        # Input normalization
-        x = self.input_norm(x)
+        # Dense layers dengan residual-like connections
+        x = self.leaky_relu(self.fc1(combined))
+        x = self.dropout1(x)
+        x = self.leaky_relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.leaky_relu(self.fc3(x))
+        x = self.dropout3(x)
+        x = self.fc4(x)
         
-        # LSTM forward pass
-        lstm_out, (h_n, c_n) = self.lstm(x)
-        
-        # Self-attention with residual connection
-        attn_out, attn_weights = self.attention(lstm_out, lstm_out, lstm_out)
-        attn_out = self.attn_norm(attn_out + lstm_out)  # Residual connection
-        
-        # Global average pooling
-        # Shape: (batch_size, seq_len, hidden_size*2) -> (batch_size, hidden_size*2, seq_len)
-        pooled = self.global_pool(attn_out.transpose(1, 2))
-        # Shape: (batch_size, hidden_size*2, 1) -> (batch_size, hidden_size*2)
-        pooled = pooled.squeeze(-1)
-        
-        # Feature extraction
-        features = self.feature_extractor(pooled)
-        
-        # Classification
-        logits = self.classifier(features)
-        
-        return logits
+        return x

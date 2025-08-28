@@ -129,37 +129,23 @@ def to_yhat(logits):
     y_hat = torch.argmax(probs, dim=1)
     return probs.numpy(), y_hat.numpy()
 
-""" class DatasetManager(torch.utils.data.Dataset):
-    def __init__(self, features, labels):
-        self.features = features
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.features)
-
-    def __getitem__(self, idx):
-        features = torch.tensor(self.features[idx], dtype=torch.float32)
-        labels = torch.tensor(self.labels[idx], dtype=torch.int64)
-        return features, labels """
-
 class DatasetManager(torch.utils.data.Dataset):
-    def __init__(self, features, labels, sequence_length):
-        self.sequence_length = sequence_length
-        self.features = []
-        self.labels = []
-        
-        for i in range(len(features) - sequence_length + 1):
-            self.features.append(features[i:i + sequence_length])
-            self.labels.append(labels[i + sequence_length - 1])
-        
-        self.features = torch.FloatTensor(np.array(self.features))
-        self.labels = torch.LongTensor(np.array(self.labels))
+    def __init__(self, sequences, market_ids, periods, labels):
+        self.sequences = torch.FloatTensor(sequences)
+        self.market_ids = torch.LongTensor(market_ids)
+        self.periods = torch.LongTensor(periods)
+        self.labels = torch.LongTensor(labels)
     
     def __len__(self):
-        return len(self.features)
+        return len(self.sequences)
     
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx]
+        return {
+            'sequence': self.sequences[idx],
+            'market_id': self.market_ids[idx],
+            'period': self.periods[idx],
+            'label': self.labels[idx]
+        }
 
 def create_labels(df):
     # Label
@@ -178,189 +164,13 @@ def create_labels(df):
         else:
             return "HOLD" if hold else None
 
+    # hapus label yg nan
+    df.dropna(subset=['Future_Return'], axis=0, inplace=True)
+
     df["Label"] = df["Future_Return"].apply(create_label)
-
-def create_advanced_features(df):
-    # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
-    # Hourly price change percentage
-    df["Price_Change_Pct"] = (df["close"] - df["open"]) / df["open"] * 100
-    
-    # Price change from previous period
-    df["Price_Change_Prev_Pct"] = df["close"].pct_change() * 100
-    
-    # High-Low range as percentage of close
-    df["HL_Range_Pct"] = (df["high"] - df["low"]) / df["close"] * 100
-    
-    
-    # ===== MOVING AVERAGES (Relative to current price) =====
-    
-    # SMA deviation from current price
-    df["SMA_5"] = df["close"].rolling(window=5).mean()
-    df["SMA_5_Deviation_Pct"] = (df["close"] - df["SMA_5"]) / df["SMA_5"] * 100
-    
-    df["SMA_10"] = df["close"].rolling(window=10).mean()
-    df["SMA_10_Deviation_Pct"] = (df["close"] - df["SMA_10"]) / df["SMA_10"] * 100
-    
-    # EMA deviation from current price
-    df["EMA_5"] = df["close"].ewm(span=5, adjust=False).mean()
-    df["EMA_5_Deviation_Pct"] = (df["close"] - df["EMA_5"]) / df["EMA_5"] * 100
-    
-    df["EMA_12"] = df["close"].ewm(span=12, adjust=False).mean()
-    df["EMA_12_Deviation_Pct"] = (df["close"] - df["EMA_12"]) / df["EMA_12"] * 100
-    
-    
-    # ===== MOMENTUM INDICATORS (Already normalized 0-100) =====
-    
-    # RSI (already 0-100 scale)
-    delta = df["close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    roll_up = gain.rolling(14).mean()
-    roll_down = loss.rolling(14).mean()
-    rs = roll_up / roll_down
-    df["RSI_14"] = 100 - (100 / (1 + rs))
-    
-    # RSI normalized to -1 to 1 range
-    df["RSI_Normalized"] = (df["RSI_14"] - 50) / 50
-    
-    
-    # ===== MACD (Normalized) =====
-    
-    ema12 = df["close"].ewm(span=12, adjust=False).mean()
-    ema26 = df["close"].ewm(span=26, adjust=False).mean()
-    df["MACD"] = ema12 - ema26
-    df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
-    
-    # MACD as percentage of price
-    df["MACD_Pct"] = df["MACD"] / df["close"] * 100
-    df["Signal_Pct"] = df["Signal"] / df["close"] * 100
-    df["MACD_Histogram_Pct"] = (df["MACD"] - df["Signal"]) / df["close"] * 100
-    
-    
-    # ===== VOLATILITY INDICATORS (Normalized) =====
-    
-    # ATR as percentage of price
-    df["H-L"] = df["high"] - df["low"]
-    df["H-C"] = abs(df["high"] - df["close"].shift())
-    df["L-C"] = abs(df["low"] - df["close"].shift())
-    df["TR"] = df[["H-L", "H-C", "L-C"]].max(axis=1)
-    df["ATR_14"] = df["TR"].rolling(14).mean()
-    df["ATR_Pct"] = df["ATR_14"] / df["close"] * 100
-    
-    
-    # ===== BOLLINGER BANDS (Position based) =====
-    
-    df["SMA_20"] = df["close"].rolling(window=20).mean()
-    df["STDDEV_20"] = df["close"].rolling(window=20).std()
-    df["UpperBB"] = df["SMA_20"] + (df["STDDEV_20"] * 2)
-    df["LowerBB"] = df["SMA_20"] - (df["STDDEV_20"] * 2)
-    
-    # Bollinger Band position (0 = at lower band, 1 = at upper band)
-    df["BB_Position"] = (df["close"] - df["LowerBB"]) / (df["UpperBB"] - df["LowerBB"])
-    
-    # Distance from bands as percentage
-    df["BB_Upper_Distance_Pct"] = (df["UpperBB"] - df["close"]) / df["close"] * 100
-    df["BB_Lower_Distance_Pct"] = (df["close"] - df["LowerBB"]) / df["close"] * 100
-    
-    
-    # ===== VOLUME INDICATORS =====
-    
-    if "volume" in df.columns:
-        # Volume change percentage
-        df["Volume_Change_Pct"] = np.where(df["volume"] == 0, 0, df["volume"].pct_change() * 100)
-        #df["Volume_Change_Pct"] = df["volume"].pct_change() * 100
-        
-        # Volume moving average deviation
-        df["Volume_MA_5"] = df["volume"].rolling(5).mean()
-        df["Volume_MA_Deviation_Pct"] = np.where(df["volume"] == 0, 0, (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100)
-        #df["Volume_MA_Deviation_Pct"] = (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100
-        df["Volume_Flag"] = np.where(df["volume"] == 0, 0, 1)
-    # ===== TREND STRENGTH INDICATORS =====
-    
-    # Price momentum over different periods
-    df["Momentum_3"] = (df["close"] - df["close"].shift(3)) / df["close"].shift(3) * 100
-    df["Momentum_5"] = (df["close"] - df["close"].shift(5)) / df["close"].shift(5) * 100
-    df["Momentum_10"] = (df["close"] - df["close"].shift(10)) / df["close"].shift(10) * 100
-    
-    # Trend consistency (how many of last N periods were up/down)
-    df["Up_Periods_5"] = (df["close"].diff() > 0).rolling(5).sum() / 5
-    df["Down_Periods_5"] = (df["close"].diff() < 0).rolling(5).sum() / 5
-    
-    
-    # ===== PATTERN RECOGNITION FEATURES =====
-
-    # Doji pattern (open close to close)
-    df["Doji_Pattern"] = abs(df["close"] - df["open"]) / (df["high"] - df["low"])
-    
-    # Hammer/Shooting star patterns
-    body_size = abs(df["close"] - df["open"])
-    upper_shadow = df["high"] - df[["close", "open"]].max(axis=1)
-    lower_shadow = df[["close", "open"]].min(axis=1) - df["low"]
-    
-    df["Upper_Shadow_Ratio"] = upper_shadow / body_size
-    df["Lower_Shadow_Ratio"] = lower_shadow / body_size
-    
-    # ===== User features =====
-    user_features = [
-        "open", 
-        "high", 
-        "low", 
-        "close", 
-        "RSI_14", 
-        "H-L", 
-        "H-C", 
-        "L-C", 
-        "TR", 
-        "SMA_5", 
-        "SMA_10", 
-        "SMA_20", 
-        "EMA_5", 
-        "EMA_12", 
-        "STDDEV_20", 
-        "UpperBB", 
-        "LowerBB", 
-        "MACD", 
-        "Signal", 
-        "ATR_14"
-    ]
-    
-    if "volume" in df.columns:
-        user_features.append("Volume_MA_5")
-    
-    #df = df.drop(columns=[col for col in user_features if col in df.columns])
-    
-    # ===== ai features =====
-    ai_features = [
-        "Price_Change_Pct",           # Hourly price change
-        "Price_Change_Prev_Pct",      # Previous period change
-        "HL_Range_Pct",               # Volatility measure
-        "SMA_5_Deviation_Pct",        # Short-term trend
-        "SMA_10_Deviation_Pct",       # Medium-term trend
-        "EMA_5_Deviation_Pct",        # Responsive trend
-        "RSI_Normalized",             # Momentum (-1 to 1)
-        "MACD_Histogram_Pct",         # MACD signal
-        "ATR_Pct",                    # Volatility
-        "BB_Position",                # Bollinger band position
-        "Momentum_3",                 # Short momentum
-        "Momentum_5",                 # Medium momentum
-        "Up_Periods_5",               # Trend consistency
-        "Doji_Pattern",               # Pattern recognition
-        "Signal_Pct",
-        "Down_Periods_5",
-        "Momentum_10",
-        "MACD_Pct",
-        "BB_Upper_Distance_Pct",
-        "BB_Lower_Distance_Pct",
-        "Upper_Shadow_Ratio",
-        "Lower_Shadow_Ratio"
-    ]
-    
-    # volume features
-    if "volume" in df.columns:
-        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_Flag"])
-
-    return user_features, ai_features
+    df.drop(columns=["Future_Close"], inplace=True)
+    df.drop(columns=["Future_Return"], inplace=True)
 
 def print_table_info(df, title):
     print("\n", title)
@@ -370,32 +180,66 @@ def print_table_info(df, title):
     label_counts = df['Label'].value_counts()
     print(label_counts)
 
+def create_sequences(df, sequence_length=20):
+    price_columns = ['open', 'high', 'low', 'close']
+
+    X_sequences = []
+    X_market_ids = []
+    X_periods = []
+    y = []
+    
+    # Group by market_id dan period
+    for (market_id, period), group in df.groupby(['market_id', 'period']):
+        group = group.sort_index()  # Sort by timestamp
+        create_labels(df=group)
+        print_table_info(group, "Dataset")
+        
+        if len(group) < sequence_length + 1:
+            continue
+            
+        ohlc_data = group[price_columns].values
+        
+        for i in range(len(group) - sequence_length):
+            # Get 20 candles sequence
+            sequence = ohlc_data[i:i+sequence_length]
+            
+            # Percentage change normalization
+            normalized_sequence = (sequence / sequence[0]) - 1
+            
+            X_sequences.append(normalized_sequence)
+            X_market_ids.append(market_id)
+            X_periods.append(period)
+            
+            # Target Label
+            target_label = group.iloc[i + sequence_length]['Label']
+            y.append(target_label)
+    
+    return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(y))
+
 def prepare_data(df):
-    user_features, ai_features = create_advanced_features(df=df)
-    create_labels(df=df)
-    # print(df[["volume", "Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_MA_5", "Volume_Flag"]].tail(50))
-    
-    print_table_info(df, "Original Data")
+    X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
 
-    # hapus yg nan, inf
-    df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+    print(f"Data shapes:")
+    print(f"X_sequences: {X_sequences.shape}")
+    print(f"X_market_ids: {X_market_ids.shape}")  
+    print(f"X_periods: {X_periods.shape}")
+    print(f"Y_labels: {Y_labels.shape}")
     
-    print_table_info(df, "Cleaned Original Data")
+    print(f"\nLabel distribution:")
+    unique, counts = np.unique(Y_labels, return_counts=True)
+    for signal, count in zip(unique, counts):
+        print(f"{signal}: {count} ({count/len(Y_labels)*100:.1f}%)")
 
-    plot_dataset_all(df=df[ai_features])
-    plot_dataset_chart(df=df[user_features + ["Label"]])
+    # encoding
+    encoder_market_ids = preprocessing.LabelEncoder()
+    encoder_periods = preprocessing.LabelEncoder()
+    encoder_labels = preprocessing.LabelEncoder()
 
-    # label encoding
-    encoder_name = preprocessing.LabelEncoder()
-    df['Label'] = encoder_name.fit_transform(df["Label"])
+    X_market_ids_encoded = encoder_market_ids.fit_transform(X_market_ids)
+    X_periods_encoded = encoder_periods.fit_transform(X_periods)
+    Y_labels_encoded = encoder_labels.fit_transform(Y_labels)
 
-    # ambil hanya feature yg penting
-    df = df[ai_features + ["Label"]].apply(pd.to_numeric, errors="coerce")
-    
-    labels = df['Label'].values
-    features = df.drop(columns=["Label"]).values
-    
-    return features, labels, encoder_name
+    return (X_sequences, X_market_ids_encoded, X_periods_encoded, Y_labels_encoded), (encoder_market_ids, encoder_periods, encoder_labels)
 
 def balance_data(features, labels, method, random_state):
     if method == 'smote':
@@ -434,27 +278,19 @@ def balance_data(features, labels, method, random_state):
     
     return features_balanced, labels_balanced
 
-loss_fn = nn.CrossEntropyLoss()
-
-def train_fn(data_loader, model, optimizer, device):
+def train_fn(data_loader, model, optimizer, criterion):
     model.train()
     final_loss = 0
 
     for batch in data_loader:
-        features, labels = batch
-        features = features.to(device)
-        labels = labels.to(device)
+        sequences = batch['sequence'].to(config.DEVICE)
+        market_ids = batch['market_id'].to(config.DEVICE)
+        periods = batch['period'].to(config.DEVICE)
+        labels = batch['label'].to(config.DEVICE)
 
-        # zero
         optimizer.zero_grad()
-
-        # Forward
-        output = model(features)
-        
-        # loss
-        loss = loss_fn(output, labels)
-
-        # Backward
+        output = model(sequences, market_ids, periods)
+        loss = criterion(output, labels)
         loss.backward()
         
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -465,7 +301,7 @@ def train_fn(data_loader, model, optimizer, device):
 
     return final_loss/len(data_loader)
 
-def val_fn(data_loader, model, device):
+def val_fn(data_loader, model, criterion):
     
     model.eval()
     final_loss = 0
@@ -474,15 +310,13 @@ def val_fn(data_loader, model, device):
 
     with torch.no_grad():
         for batch in data_loader:
-            features, labels = batch
-            features = features.to(device)
-            labels = labels.to(device)
+            sequences = batch['sequence'].to(config.DEVICE)
+            market_ids = batch['market_id'].to(config.DEVICE)
+            periods = batch['period'].to(config.DEVICE)
+            labels = batch['label'].to(config.DEVICE)
 
-            # Forward
-            output =  model(features)
-            
-            # loss
-            loss =  loss_fn(output, labels)
+            output =  model(sequences, market_ids, periods)
+            loss =  criterion(output, labels)
  
             final_loss += loss.item()
 

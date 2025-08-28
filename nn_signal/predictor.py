@@ -25,6 +25,7 @@ class Predictor:
             dropout=self.meta_data['dropout'],
             num_classes=self.meta_data['num_classes']
         )
+        
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
         self.model.to(self.device).eval()
     
