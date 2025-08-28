@@ -147,7 +147,7 @@ class DatasetManager(torch.utils.data.Dataset):
             'label': self.labels[idx]
         }
 
-def create_labels(df):
+def create_labels(df, hold=True):
     # Label
     # Geser harga close ke depan
     df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
@@ -156,7 +156,7 @@ def create_labels(df):
     df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
 
     # Buat label berdasarkan aturan
-    def create_label(x, hold=True):
+    def create_label(x):
         if x > config.THRESHOLD_LABEL:
             return "BUY"
         elif x < -config.THRESHOLD_LABEL:
@@ -184,7 +184,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
     X_market_ids = []
     X_periods = []
-    y = []
+    Y_labels = []
     
     # Group by market_id dan period
     for (market_id, period), group in df.groupby(['market_id', 'period']):
@@ -198,21 +198,22 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
         ohlc_data = group[config.PRICE_COLUMNS].values
         
         for i in range(len(group) - sequence_length):
-            # Get 20 candles sequence
+            # Get n candles sequence
             sequence = ohlc_data[i:i+sequence_length]
             
             # Percentage change normalization
             normalized_sequence = (sequence / sequence[0]) - 1
             
-            X_sequences.append(normalized_sequence)
+            X_sequences.append(sequence)
+            #X_sequences.append(normalized_sequence)
             X_market_ids.append(market_id)
             X_periods.append(period)
             
             # Target Label
             target_label = group.iloc[i + sequence_length]['Label']
-            y.append(target_label)
+            Y_labels.append(target_label)
     
-    return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(y))
+    return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(Y_labels))
 
 def prepare_data(df):
     X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
