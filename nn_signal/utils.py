@@ -429,21 +429,31 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
         for arr in X_sequences
     ])
 
-    return X_sequences_padding_np, np.array(X_market_ids), np.array(X_periods), np.array(Y_labels)
-
-def prepare_data(df):
-    X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
+    X_market_ids_np = np.array(X_market_ids)
+    X_periods_np = np.array(X_periods)
+    Y_labels_np = np.array(Y_labels)
 
     print(f"Data shapes:")
-    print(f"X_sequences: {X_sequences.shape}")
-    print(f"X_market_ids: {X_market_ids.shape}")  
-    print(f"X_periods: {X_periods.shape}")
-    print(f"Y_labels: {Y_labels.shape}")
+    print(f"X_sequences: {X_sequences_padding_np.shape}")
+    print(f"X_market_ids: {X_market_ids_np.shape}")  
+    print(f"X_periods: {X_periods_np.shape}")
+    print(f"Y_labels: {Y_labels_np.shape}")
     
     print(f"\nLabel distribution:")
-    unique, counts = np.unique(Y_labels, return_counts=True)
+    unique, counts = np.unique(Y_labels_np, return_counts=True)
     for signal, count in zip(unique, counts):
-        print(f"{signal}: {count} ({count/len(Y_labels)*100:.1f}%)")
+        print(f"{signal}: {count} ({count/len(Y_labels_np)*100:.1f}%)")
+
+    return X_sequences_padding_np, X_market_ids_np, X_periods_np, Y_labels_np
+
+def prepare_data(df):
+    train_size = int(0.8 * len(df))
+    train_df = df.iloc[:train_size]
+    test_df  = df.iloc[train_size:]
+
+    print(len(df), len(train_df), len(test_df))
+
+    X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
 
     # encoding
     encoder_market_ids = preprocessing.LabelEncoder()
