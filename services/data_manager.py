@@ -138,33 +138,39 @@ class DataManager:
             self.session.rollback()
             print("Error:", e)
 
-    def get_data(self, market_id=None, period=None):            
-        if market_id and period:
-            query = (
-                self.session.query(TPrice)
-                .filter(
-                    and_(
-                        TPrice.market_id == market_id,
-                        TPrice.period == period
-                    )
-                ).all()
-            )
-        else:
-            query = self.session.query(TPrice).all()
-        
-        data = [
-            {c.name: getattr(row, c.name) for c in row.__table__.columns}
-            for row in query
-        ]
+    def get_data(self, market_id=None, period=None):
+        try:
+            if market_id and period:
+                query = (
+                    self.session.query(TPrice)
+                    .filter(
+                        and_(
+                            TPrice.market_id == market_id,
+                            TPrice.period == period
+                        )
+                    ).all()
+                )
+            else:
+                query = self.session.query(TPrice).all()
+            
+            if not query:
+                raise ValueError(f"No data found for market_id={market_id} period={period}")
+            
+            data = [
+                {c.name: getattr(row, c.name) for c in row.__table__.columns}
+                for row in query
+            ]
 
-        df = pd.DataFrame(data)
+            df = pd.DataFrame(data)
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df.set_index('timestamp', inplace=True)
-        df = df.sort_index()
-        
-        self.fill_column(df)
-        
-        print(df)
-        return df
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df.set_index('timestamp', inplace=True)
+            df = df.sort_index()
+            
+            self.fill_column(df)
+            
+            print(df)
+            return df
+        except Exception as e:
+            raise RuntimeError(f"Error fetching data: {e}")
 

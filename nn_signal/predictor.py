@@ -4,8 +4,7 @@ import nn_signal.utils as utils
 import nn_signal.model as nn_model
 import config
 import os
-import json
-import pandas as pd
+import numpy as np
 
 class Predictor:
     def __init__(self, model_path):
@@ -13,13 +12,15 @@ class Predictor:
             raise FileNotFoundError(f"\nYou need to train AI on main.py")
         self.meta_data = joblib.load(config.META_PATH)
         
+        self.n_features = self.meta_data['n_features']
         self.encoder_market_ids = self.meta_data['encoder_market_ids']
         self.encoder_periods = self.meta_data['encoder_periods']
         self.encoder_labels = self.meta_data['encoder_labels']
         
         self.model = nn_model.Model(
             len(self.encoder_market_ids.classes_),
-            len(self.encoder_periods.classes_)
+            len(self.encoder_periods.classes_),
+            self.n_features
         )
         
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
@@ -38,15 +39,29 @@ class Predictor:
         return [self.encoder_labels.classes_, class_scores[0]], class_preds
     
     def main(self, df, market_id, period):
-        df_last_sequence = df[config.PRICE_COLUMNS].tail(config.SEQUENCE_CANDLE_LENGTH)
-        print(df_last_sequence)
-        
-        sequence = df_last_sequence.values
-        market_encoded = self.encoder_market_ids.transform([market_id])[0]
-        period_encoded = self.encoder_periods.transform([period])[0]
+        try:
+            market_encoded = self.encoder_market_ids.transform([market_id])[0]
+        except (AttributeError, ValueError):
+            raise RuntimeError("Market encoder not trained yet or label unknown")
 
-        # last row
-        print("Timestamp: ", df.tail(1).index[0])
-        
-        logits = self.prediction(sequence, market_encoded, period_encoded)
-        return self.logits_extraction(logits)
+        try:
+            period_encoded = self.encoder_periods.transform([period])[0]
+        except (AttributeError, ValueError):
+            raise RuntimeError("Period encoder not trained yet or label unknown")
+
+        try:
+            df, user_features, ai_features = utils.create_indicators(df=df)
+            df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+
+            df_last_sequence = df[ai_features].tail(config.SEQUENCE_CANDLE_LENGTH)
+            print(df_last_sequence)
+            
+            sequence = df_last_sequence.values
+
+            # last row
+            print("Timestamp: ", df.tail(1).index[0])
+            
+            logits = self.prediction(sequence, market_encoded, period_encoded)
+            return self.logits_extraction(logits)
+        except Exception as e:
+            print(e)

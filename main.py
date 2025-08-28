@@ -26,19 +26,27 @@ class Main:
     
     def predict(self):
         predictor = Predictor(config.TRAINED_PATH)
-        market_id = input("Market ID: ")
-        period = input("Period: ")
+        while True:
+            market_id = input("Market ID: ")
+            period = input("Period: ")
+            
+            if market_id and period:
+                try:
+                    self.data_manager.import_json_to_database_etoro(market_id=market_id)
+                    df = self.data_manager.get_data(market_id=market_id, period=period)
+                    
+                    (classes, probs), pred_index = predictor.main(df=df, market_id=market_id, period=period)
+                    print(pred_index, classes, probs)
+                    
+                    sorted_idx = np.argsort(probs)[::-1]
+                    print("Results:")
+                    for i in sorted_idx:
+                        print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")
 
-        self.data_manager.import_json_to_database_etoro(market_id=market_id)
-        df = self.data_manager.get_data(market_id=market_id, period=period)
-        
-        (classes, probs), pred_index = predictor.main(df=df, market_id=market_id, period=period)
-        print(pred_index, classes, probs)
-        
-        sorted_idx = np.argsort(probs)[::-1]
-        print("Results:")
-        for i in sorted_idx:
-            print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")
+                except RuntimeError as e:
+                    print("Prediction error:", e)
+            else:
+                break
     
     def menu(self):
         while True:

@@ -26,6 +26,7 @@ class Trainer:
             print("Labels:", encoder_labels.classes_)
 
             meta_data = {
+                "n_features": X_sequences.shape[2],
                 'encoder_market_ids': encoder_market_ids,
                 "encoder_periods": encoder_periods,
                 "encoder_labels": encoder_labels
@@ -61,7 +62,7 @@ class Trainer:
                             
                 n_markets = len(encoder_market_ids.classes_)
                 n_periods = len(encoder_periods.classes_)
-                model = nn_model.Model(n_markets, n_periods).to(config.DEVICE)
+                model = nn_model.Model(n_markets, n_periods, X_sequences.shape[2]).to(config.DEVICE)
 
                 total_params = sum(p.numel() for p in model.parameters())
                 print("Parameters:", total_params)

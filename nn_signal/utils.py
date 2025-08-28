@@ -419,9 +419,17 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             target_label = group_candle_sequence_indicator['Label'].tail(1).item()
             Y_labels.append(target_label)
 
+            #print(sequence.shape)
             #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
     
-    return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(Y_labels))
+    max_rows = max(arr.shape[0] for arr in X_sequences)
+    
+    X_sequences_padding_np = np.array([
+        np.pad(arr, ((max_rows - arr.shape[0], 0), (0, 0)), mode='constant', constant_values=0)
+        for arr in X_sequences
+    ])
+
+    return X_sequences_padding_np, np.array(X_market_ids), np.array(X_periods), np.array(Y_labels)
 
 def prepare_data(df):
     X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
