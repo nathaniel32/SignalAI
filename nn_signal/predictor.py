@@ -16,8 +16,6 @@ class Predictor:
         
         self.encoder_labels = self.meta_data['encoder_labels']
         
-        self.num_benutzerids = len(self.encoder_labels.classes_)
-
         self.model = nn_model.Model(
             input_size=self.meta_data['input_size'],
             hidden_size=self.meta_data['hidden_size'],

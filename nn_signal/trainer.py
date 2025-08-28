@@ -64,7 +64,7 @@ class Trainer:
                 model = nn_model.Model(n_markets, n_periods).to(config.DEVICE)
 
                 total_params = sum(p.numel() for p in model.parameters())
-                print(total_params)
+                print("Parameters:", total_params)
 
                 if config.RETRAIN_MODEL:
                     try:
@@ -123,7 +123,11 @@ class Trainer:
                 print(f"\nTraining duration: {trainingsdauer:.2f} minutes")
 
                 utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | AI", plot=True)
-                summary(model, input_size=(config.TRAIN_BATCH_SIZE, config.SEQUENCE_LENGTH, X_sequences.shape[1]))
+                summary(model, input_data=[
+                    torch.randn(1, 20, 4).to(config.DEVICE),
+                    torch.randint(0, n_markets, (1,)).to(config.DEVICE),
+                    torch.randint(0, n_periods, (1,)).to(config.DEVICE)
+                ])
             else:
                 print("\n!!!Too little X_sequences to train AI!!!")
         except Exception as e:
