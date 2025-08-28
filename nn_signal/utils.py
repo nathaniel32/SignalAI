@@ -210,7 +210,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             X_periods.append(period)
             
             # Target Label
-            target_label = group.iloc[i + sequence_length]['Label']
+            target_label = group.iloc[i + sequence_length - 1]['Label']
             Y_labels.append(target_label)
     
     return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(Y_labels))
