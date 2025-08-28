@@ -40,10 +40,8 @@ class Predictor:
     def main(self, df):    
         market_id = 28
         period = 60
-
-        price_columns = ['open', 'high', 'low', 'close']
         
-        sequence = df[price_columns].tail(20).values
+        sequence = df[config.PRICE_COLUMNS].tail(config.SEQUENCE_CANDLE_LENGTH).values
         market_encoded = self.encoder_market_ids.transform([market_id])[0]
         period_encoded = self.encoder_periods.transform([period])[0]
 

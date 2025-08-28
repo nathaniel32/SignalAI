@@ -180,9 +180,7 @@ def print_table_info(df, title):
     label_counts = df['Label'].value_counts()
     print(label_counts)
 
-def create_sequences(df, sequence_length=20):
-    price_columns = ['open', 'high', 'low', 'close']
-
+def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
     X_market_ids = []
     X_periods = []
@@ -196,8 +194,8 @@ def create_sequences(df, sequence_length=20):
         
         if len(group) < sequence_length + 1:
             continue
-            
-        ohlc_data = group[price_columns].values
+        
+        ohlc_data = group[config.PRICE_COLUMNS].values
         
         for i in range(len(group) - sequence_length):
             # Get 20 candles sequence

@@ -124,7 +124,7 @@ class Trainer:
 
                 utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | AI", plot=True)
                 summary(model, input_data=[
-                    torch.randn(1, 20, 4).to(config.DEVICE),
+                    torch.randn(1, config.SEQUENCE_CANDLE_LENGTH, 4).to(config.DEVICE),
                     torch.randint(0, n_markets, (1,)).to(config.DEVICE),
                     torch.randint(0, n_periods, (1,)).to(config.DEVICE)
                 ])

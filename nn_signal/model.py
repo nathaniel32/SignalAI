@@ -70,7 +70,7 @@ class Model(nn.Module):
                 lstm_hidden=128, lstm_layers=2, attention_heads=8):
        super(Model, self).__init__()
        
-       self.sequence_length = sequence_length
+       #self.sequence_length = sequence_length
        self.n_features = n_features
        self.lstm_hidden = lstm_hidden
        
