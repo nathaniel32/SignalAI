@@ -26,13 +26,14 @@ class Main:
     
     def predict(self):
         predictor = Predictor(config.TRAINED_PATH)
-
-        #self.data_manager.import_json_to_database_etoro(market_id=28)
         market_id = input("Market ID: ")
         period = input("Period: ")
+
+        self.data_manager.import_json_to_database_etoro(market_id=market_id)
         df = self.data_manager.get_data(market_id=market_id, period=period)
         
-        pred_index, (classes, probs) = predictor.main(df=df, market_id=market_id, period=period)
+        (classes, probs), pred_index = predictor.main(df=df, market_id=market_id, period=period)
+        print(pred_index, classes, probs)
         
         sorted_idx = np.argsort(probs)[::-1]
         print("Results:")
