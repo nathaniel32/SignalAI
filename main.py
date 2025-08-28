@@ -18,11 +18,19 @@ class Main:
         ]
 
     def import_csv_to_database(self):
-        file_path = input("CSV path: ").strip()
-        market_id = input("Market ID: ").strip()
+        file_path = input("CSV path*: ").strip()
+        market_id = input("Market ID*: ").strip()
         symbol = input("Symbol: ").strip()
-        period = input("Period: ").strip()
-        self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column="Date", open_column="Open", high_column="High", low_column="Low", close_column="Close", volume_column="Volume", adjusted_close_column="Adjusted Close")
+        period = input("Period*: ").strip()
+
+        date_column = input("Date column (default: Date): ") or "Date"
+        open_column = input("Open column (default: Open): ") or "Open"
+        high_column = input("High column (default: High): ") or "High"
+        low_column = input("Low column (default: Low): ") or "Low"
+        close_column = input("Close column (default: Close): ") or "Close"
+        volume_column = input("Volume column (default: Volume): ") or "Volume"
+        adjusted_close_column = input("Adjusted Close column (default: Adjusted Close): ") or "Adjusted Close"
+        self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column=date_column, open_column=open_column, high_column=high_column, low_column=low_column, close_column=close_column, volume_column=volume_column, adjusted_close_column=adjusted_close_column)
     
     def predict(self):
         predictor = Predictor(config.TRAINED_PATH)
