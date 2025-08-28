@@ -11,44 +11,46 @@ class Predictor:
     def __init__(self, model_path):
         if not os.path.isfile(model_path):
             raise FileNotFoundError(f"\nYou need to train AI on main.py")
-        self.device = config.DEVICE
         self.meta_data = joblib.load(config.META_PATH)
         
+        self.encoder_market_ids = self.meta_data['encoder_market_ids']
+        self.encoder_periods = self.meta_data['encoder_periods']
         self.encoder_labels = self.meta_data['encoder_labels']
         
         self.model = nn_model.Model(
-            input_size=self.meta_data['input_size'],
-            hidden_size=self.meta_data['hidden_size'],
-            num_layers=self.meta_data['num_layers'],
-            dropout=self.meta_data['dropout'],
-            num_classes=self.meta_data['num_classes']
+            len(self.encoder_market_ids.classes_),
+            len(self.encoder_periods.classes_)
         )
         
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
-        self.model.to(self.device).eval()
+        self.model.to(config.DEVICE).eval()
     
-    def prediction(self, features):
+    def prediction(self, sequence, market_encoded, period_encoded):
+        sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(config.DEVICE)
+        market_tensor = torch.LongTensor([market_encoded]).to(config.DEVICE)
+        period_tensor = torch.LongTensor([period_encoded]).to(config.DEVICE)
         with torch.no_grad():
-            logits = self.model(features)
+            logits = self.model(sequence_tensor, market_tensor, period_tensor)
         return logits
     
     def logits_extraction(self, logits):
         class_scores, class_preds = utils.to_yhat(logits)
         return class_preds, [self.encoder_labels.classes_, class_scores[0]]
                 
-    def main(self, df):
-        
-        print(df)
-        _, ai_features = utils.create_advanced_features(df=df)
+    def main(self, df):    
+        market_id = 28
+        period = 60
 
-        print(df)
-        df = df[ai_features].apply(pd.to_numeric, errors="coerce").dropna(axis=0)
+        price_columns = ['open', 'high', 'low', 'close']
         
+        sequence = df[price_columns].tail(20).values
+        market_encoded = self.encoder_market_ids.transform([market_id])[0]
+        period_encoded = self.encoder_periods.transform([period])[0]
+
+        print(sequence, market_encoded, period_encoded)
+
         # last row
-        df = df.tail(1)
-        print("Timestamp: ", df.index[0])
-
-        feature = df.values[0]
-        feature_tensor = torch.tensor(feature, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(config.DEVICE)
-        logits = self.prediction(feature_tensor)
+        print("Timestamp: ", df.tail(1).index[0])
+        
+        logits = self.prediction(sequence, market_encoded, period_encoded)
         return self.logits_extraction(logits)
