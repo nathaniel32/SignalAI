@@ -148,14 +148,20 @@ class DatasetManager(torch.utils.data.Dataset):
         }
 
 def print_table_info(df, title):
-    print("\n", title)
-    
+    print("="*50)
+    print(title)
     print(df)
     
-    label_counts = df['Label'].value_counts()
-    print(label_counts)
+    if 'Label' in df.columns:
+        label_counts = df['Label'].value_counts()
+        print("\nLabel Counts")
+        for label, count in label_counts.items():
+            print(f"- {label}: {count}")
+    
+    print("="*50)
 
 def create_labels(df, hold=True):
+    df = df.copy()
     # Label
     # Geser harga close ke depan
     df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
@@ -175,12 +181,21 @@ def create_labels(df, hold=True):
     # hapus label yg nan
     df.dropna(subset=['Future_Return'], axis=0, inplace=True)
 
+    # dapatkan signal
     df["Label"] = df["Future_Return"].apply(create_label)
     
     df.drop(columns=["Future_Close"], inplace=True)
     df.drop(columns=["Future_Return"], inplace=True)
+    return df
 
-def create_advanced_features(df):
+def create_indicators(df):
+    """
+    Create advanced technical indicators for trading analysis.
+    Returns the original user features and new AI-derived features.
+    """
+    # Make an explicit copy to avoid SettingWithCopyWarning
+    df = df.copy()
+    
     # ===== PRICE CHANGE FEATURES (Percentage based) =====
     
     # Hourly price change percentage
@@ -269,13 +284,13 @@ def create_advanced_features(df):
     if "volume" in df.columns:
         # Volume change percentage
         df["Volume_Change_Pct"] = np.where(df["volume"] == 0, 0, df["volume"].pct_change() * 100)
-        #df["Volume_Change_Pct"] = df["volume"].pct_change() * 100
         
         # Volume moving average deviation
         df["Volume_MA_5"] = df["volume"].rolling(5).mean()
         df["Volume_MA_Deviation_Pct"] = np.where(df["volume"] == 0, 0, (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100)
-        #df["Volume_MA_Deviation_Pct"] = (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100
         df["Volume_Flag"] = np.where(df["volume"] == 0, 0, 1)
+    
+    
     # ===== TREND STRENGTH INDICATORS =====
     
     # Price momentum over different periods
@@ -328,9 +343,7 @@ def create_advanced_features(df):
     if "volume" in df.columns:
         user_features.append("Volume_MA_5")
     
-    #df = df.drop(columns=[col for col in user_features if col in df.columns])
-    
-    # ===== ai features =====
+    # ===== AI features =====
     ai_features = [
         "Price_Change_Pct",           # Hourly price change
         "Price_Change_Prev_Pct",      # Previous period change
@@ -356,11 +369,11 @@ def create_advanced_features(df):
         "Lower_Shadow_Ratio"
     ]
     
-    # volume features
+    # Volume features
     if "volume" in df.columns:
         ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_Flag"])
 
-    return user_features, ai_features
+    return df, user_features, ai_features
 
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
@@ -371,7 +384,6 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     # Group by market_id dan period
     for (market_id, period), group in df.groupby(['market_id', 'period']):
         group = group.sort_index()  # Sort by timestamp
-        create_labels(df=group)
         print_table_info(group, "Dataset")
         
         if len(group) < sequence_length + 1:
@@ -380,25 +392,34 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
         for i in range(len(group) - sequence_length):
             # Get n candles sequence
             group_candle_sequence = group.iloc[i:i+sequence_length] #group[i:i+sequence_length]
+            
+            # Add Indicators
+            group_candle_sequence_indicator, user_features, ai_features = create_indicators(df=group_candle_sequence)
+            
+            # Add Labels
+            group_candle_sequence_indicator = create_labels(df=group_candle_sequence_indicator)
 
-            sequence = group_candle_sequence[config.PRICE_COLUMNS].values
+            # Clean Data
+            group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+
+            #sequence = group_candle_sequence[config.PRICE_COLUMNS].values
+            sequence = group_candle_sequence_indicator[ai_features].values
             
             # Percentage change normalization
             #normalized_sequence = (sequence / sequence[0]) - 1
             #X_sequences.append(normalized_sequence)
-            
+            market_id = group_candle_sequence_indicator['market_id'].tail(1).item()
+            period = group_candle_sequence_indicator['period'].tail(1).item()
+
             X_sequences.append(sequence)
             X_market_ids.append(market_id)
             X_periods.append(period)
             
             # Target Label
-            target_label = group_candle_sequence['Label'].tail(1)
+            target_label = group_candle_sequence_indicator['Label'].tail(1).item()
             Y_labels.append(target_label)
 
-            #print(group_candle_sequence)
-            #print()
-            #print(target_label)
-            #print()
+            #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
     
     return (np.array(X_sequences), np.array(X_market_ids), np.array(X_periods), np.array(Y_labels))
 
