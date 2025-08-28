@@ -37,8 +37,10 @@ class Predictor:
         class_scores, class_preds = utils.to_yhat(logits)
         return class_preds, [self.encoder_labels.classes_, class_scores[0]]
                 
-    def main(self, df, market_id, period):        
-        sequence = df[config.PRICE_COLUMNS].tail(config.SEQUENCE_CANDLE_LENGTH).values
+    def main(self, df, market_id, period):
+        df_last_sequence = df[config.PRICE_COLUMNS].tail(config.SEQUENCE_CANDLE_LENGTH)
+        print(df_last_sequence)
+        sequence = df_last_sequence.values
         market_encoded = self.encoder_market_ids.transform([market_id])[0]
         period_encoded = self.encoder_periods.transform([period])[0]
 
