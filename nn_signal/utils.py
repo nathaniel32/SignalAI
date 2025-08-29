@@ -281,14 +281,13 @@ def create_indicators(df):
     
     # ===== VOLUME INDICATORS =====
     
-    if "volume" in df.columns:
-        # Volume change percentage
-        df["Volume_Change_Pct"] = np.where(df["volume"] == 0, 0, df["volume"].pct_change() * 100)
-        
-        # Volume moving average deviation
-        df["Volume_MA_5"] = df["volume"].rolling(5).mean()
-        df["Volume_MA_Deviation_Pct"] = np.where(df["volume"] == 0, 0, (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100)
-        df["Volume_Flag"] = np.where(df["volume"] == 0, 0, 1)
+    # Volume change percentage
+    df["Volume_Change_Pct"] = np.where(df["volume"] == 0, 0, df["volume"].pct_change() * 100)
+    
+    # Volume moving average deviation
+    df["Volume_MA_5"] = df["volume"].rolling(5).mean()
+    df["Volume_MA_Deviation_Pct"] = np.where(df["volume"] == 0, 0, (df["volume"] - df["Volume_MA_5"]) / df["Volume_MA_5"] * 100)
+    df["Volume_Flag"] = np.where(df["volume"] == 0, 0, 1)
     
     
     # ===== TREND STRENGTH INDICATORS =====
@@ -337,12 +336,10 @@ def create_indicators(df):
         "LowerBB", 
         "MACD", 
         "Signal", 
-        "ATR_14"
+        "ATR_14",
+        "Volume_MA_5"
     ]
-    
-    if "volume" in df.columns:
-        user_features.append("Volume_MA_5")
-    
+        
     # ===== AI features =====
     ai_features = [
         "Price_Change_Pct",           # Hourly price change
@@ -366,12 +363,11 @@ def create_indicators(df):
         "BB_Upper_Distance_Pct",
         "BB_Lower_Distance_Pct",
         "Upper_Shadow_Ratio",
-        "Lower_Shadow_Ratio"
+        "Lower_Shadow_Ratio",
+        "Volume_Change_Pct", 
+        "Volume_MA_Deviation_Pct", 
+        "Volume_Flag"
     ]
-    
-    # Volume features
-    if "volume" in df.columns:
-        ai_features.extend(["Volume_Change_Pct", "Volume_MA_Deviation_Pct", "Volume_Flag"])
 
     return df, user_features, ai_features
 
