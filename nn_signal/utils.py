@@ -446,25 +446,24 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
 
     return X_sequences_padding_np, X_market_ids_np, X_periods_np, Y_labels_np
 
-def prepare_data(df):
-    train_size = int(0.8 * len(df))
-    train_df = df.iloc[:train_size]
-    test_df  = df.iloc[train_size:]
-
-    print(len(df), len(train_df), len(test_df))
-
-    X_sequences, X_market_ids, X_periods, Y_labels = create_sequences(df)
-
-    # encoding
+def prepare_data(train_df, val_df):
     encoder_market_ids = preprocessing.LabelEncoder()
     encoder_periods = preprocessing.LabelEncoder()
     encoder_labels = preprocessing.LabelEncoder()
 
-    X_market_ids_encoded = encoder_market_ids.fit_transform(X_market_ids)
-    X_periods_encoded = encoder_periods.fit_transform(X_periods)
-    Y_labels_encoded = encoder_labels.fit_transform(Y_labels)
+    print("\n======== Train Dataset ========\n")
+    X_sequences_train, X_market_ids_train, X_periods_train, Y_labels_train = create_sequences(df=train_df)
+    X_market_ids_encoded_train = encoder_market_ids.fit_transform(X_market_ids_train)
+    X_periods_encoded_train = encoder_periods.fit_transform(X_periods_train)
+    Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
 
-    return (X_sequences, X_market_ids_encoded, X_periods_encoded, Y_labels_encoded), (encoder_market_ids, encoder_periods, encoder_labels)
+    print("\n======== Val Dataset ========\n")
+    X_sequences_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
+    X_market_ids_encoded_val = encoder_market_ids.transform(X_market_ids_val)
+    X_periods_encoded_val = encoder_periods.transform(X_periods_val)
+    Y_labels_encoded_val = encoder_labels.transform(Y_labels_val)
+    
+    return (X_sequences_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val), (encoder_market_ids, encoder_periods, encoder_labels)
 
 def balance_data(features, labels, method, random_state):
     if method == 'smote':
