@@ -6,6 +6,18 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 import requests
 from sqlalchemy import and_
+from enum import Enum
+
+class TimeEnum(Enum):
+    OneMinute = 60
+    FiveMinutes = 300
+    TenMinutes = 600
+    FifteenMinutes = 900
+    ThirtyMinutes = 1800
+    OneHour = 3600
+    FourHours = 14400
+    OneDay = 86400
+    OneWeek = 604800
 
 class DataManager:
     def __init__(self):
@@ -95,48 +107,52 @@ class DataManager:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             "Accept": "application/json"
         }
-        period = 60
-        try:
-            target_url = f"https://candle.etoro.com/candles/asc.json/OneMinute/1001/{market_id}/"
+
+        market_query = self.session.query(TMarket).filter_by(id=market_id).first()
+        if not market_query:
+            target_url = f"https://www.etoro.com/sapi/instrumentsinfo/instruments/{market_id}/"
             response = requests.get(f"{target_url}", proxies=None, headers=headers)
             data_json = response.json()
-            candles = data_json["Candles"][0]["Candles"]
-            
-            market_query = self.session.query(TMarket).filter_by(id=market_id).first()
-            if not market_query:
-                target_url = f"https://www.etoro.com/sapi/instrumentsinfo/instruments/{market_id}/"
+            market_symbol = data_json["internalSymbolFull"]
+            market_query = TMarket(id=market_id, symbol=market_symbol)
+            self.session.add(market_query)
+            self.session.commit()
+
+        for time in TimeEnum:
+            time_name = time.name
+            period = time.value
+            print(f"Name: {time_name}, Value: {period}")
+            try:
+                target_url = f"https://candle.etoro.com/candles/asc.json/{time_name}/1001/{market_id}/"
                 response = requests.get(f"{target_url}", proxies=None, headers=headers)
                 data_json = response.json()
-                market_symbol = data_json["internalSymbolFull"]
-                market_query = TMarket(id=market_id, symbol=market_symbol)
-                self.session.add(market_query)
+                candles = data_json["Candles"][0]["Candles"]
+                
+                print("Importing...")
+                for candle in candles:
+                    print(candle['FromDate'])
+                    price = TPrice(
+                        market_id=market_id,
+                        period=period,
+                        timestamp=candle['FromDate'],
+                        open=candle['Open'],
+                        high=candle['High'],
+                        low=candle['Low'],
+                        close=candle['Close'],
+                        volume=candle['Volume']
+                    )
+                    self.session.merge(price)
+                    """ self.session.add(price)
+                    try:
+                        self.session.commit()
+                        print("OK")
+                    except IntegrityError:
+                        self.session.rollback()
+                        print("Duplicate") """
                 self.session.commit()
-            
-            print("Importing...")
-            for candle in candles:
-                print(candle['FromDate'])
-                price = TPrice(
-                    market_id=market_id,
-                    period=period,
-                    timestamp=candle['FromDate'],
-                    open=candle['Open'],
-                    high=candle['High'],
-                    low=candle['Low'],
-                    close=candle['Close'],
-                    volume=candle['Volume']
-                )
-                self.session.merge(price)
-                """ self.session.add(price)
-                try:
-                    self.session.commit()
-                    print("OK")
-                except IntegrityError:
-                    self.session.rollback()
-                    print("Duplicate") """
-            self.session.commit()
-        except Exception as e:
-            self.session.rollback()
-            print("Error:", e)
+            except Exception as e:
+                self.session.rollback()
+                print("Error:", e)
 
     def get_data(self, market_id=None, period=None):
         try:
