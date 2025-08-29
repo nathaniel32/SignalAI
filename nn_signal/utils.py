@@ -461,13 +461,29 @@ def prepare_data(train_df, val_df):
     X_periods_encoded_train = encoder_periods.fit_transform(X_periods_train)
     Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
 
+    train_market_ids = set(encoder_market_ids.classes_)
+    train_periods = set(encoder_periods.classes_)
+    train_labels = set(encoder_labels.classes_)
+
     print("\n======== Val Dataset ========\n")
     X_sequences_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
-    X_market_ids_encoded_val = encoder_market_ids.transform(X_market_ids_val)
-    X_periods_encoded_val = encoder_periods.transform(X_periods_val)
-    Y_labels_encoded_val = encoder_labels.transform(Y_labels_val)
+
+    mask_market_ids = np.array([mid in train_market_ids for mid in X_market_ids_val])
+    mask_periods = np.array([period in train_periods for period in X_periods_val])
+    mask_labels = np.array([label in train_labels for label in Y_labels_val])
+
+    valid_mask = mask_market_ids & mask_periods & mask_labels
+
+    X_sequences_val_filtered = X_sequences_val[valid_mask]
+    X_market_ids_val_filtered = X_market_ids_val[valid_mask]
+    X_periods_val_filtered = X_periods_val[valid_mask]
+    Y_labels_val_filtered = Y_labels_val[valid_mask]
+
+    X_market_ids_encoded_val_filtered = encoder_market_ids.transform(X_market_ids_val_filtered)
+    X_periods_encoded_val_filtered = encoder_periods.transform(X_periods_val_filtered)
+    Y_labels_encoded_val_filtered = encoder_labels.transform(Y_labels_val_filtered)
     
-    return (X_sequences_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val), (encoder_market_ids, encoder_periods, encoder_labels)
+    return (X_sequences_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val_filtered, X_market_ids_encoded_val_filtered, X_periods_encoded_val_filtered, Y_labels_encoded_val_filtered), (encoder_market_ids, encoder_periods, encoder_labels)
 
 def balance_data(features, labels, method, random_state):
     if method == 'smote':
