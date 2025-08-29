@@ -117,7 +117,7 @@ class Trainer:
                     print(f'Validation Loss: {val_loss}')
                     
                     if val_loss < best_loss or epoch % 100 == 0 or epoch == config.EPOCHS-1:
-                        utils.show_conf_matrix(preds_array=preds_array, solution_array=solution_array, label=encoder_labels.classes_, title="AI", plot=True)
+                        utils.show_conf_matrix(preds_array=preds_array, solution_array=solution_array, label=encoder_labels.classes_, title=f"Epoch {epoch + 1}", plot=True)
                         
                         if val_loss < best_loss and config.SAVE_MODEL:
                             best_preds_array = preds_array
@@ -135,7 +135,7 @@ class Trainer:
 
                 print(f"\nTraining duration: {trainingsdauer:.2f} minutes")
 
-                utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | AI", plot=True)
+                utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | Best Model", plot=True)
             else:
                 print("\n!!!Too little X_sequences to train AI!!!")
         except Exception as e:
