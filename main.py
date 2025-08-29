@@ -12,7 +12,7 @@ class Main:
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
             ('Create Tables', lambda: self.data_manager.create_tables()),
             ('Import CSV', lambda: self.import_csv_to_database()),
-            ('Train AI', lambda: self.trainer.main(datasets_df=self.data_manager.get_datasets())),
+            ('Train AI', lambda: self.trainer.main(datasets_df=self.data_manager.get_datasets(period=self.data_manager.print_get_period()))),
             ('Predict Signal', lambda: self.predict()),
             ('Etoro Data', lambda: self.import_json_to_database_etoro()),
         ]
@@ -44,18 +44,17 @@ class Main:
         predictor = Predictor(config.TRAINED_PATH)
         while True:
             market_id = input("Market ID: ")
-            period = input("Period: ")
+            period = self.data_manager.print_get_period()
             
             if market_id and period:
                 try:
-                    self.data_manager.import_json_to_database_etoro(market_id=market_id)
+                    self.data_manager.import_json_to_database_etoro(market_id=market_id, period=period)
                     df = self.data_manager.get_data(market_id=market_id, period=period)
                     
                     (classes, probs), pred_index = predictor.main(df=df, market_id=market_id, period=period)
-                    print(pred_index, classes, probs)
                     
                     sorted_idx = np.argsort(probs)[::-1]
-                    print("Results:")
+                    print("\nResults:")
                     for i in sorted_idx:
                         print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")
 

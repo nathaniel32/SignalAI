@@ -13,6 +13,7 @@ class Predictor:
         self.meta_data = joblib.load(config.META_PATH)
         
         self.n_features = self.meta_data['n_features']
+        self.n_labels = self.meta_data['n_labels']
         self.encoder_market_ids = self.meta_data['encoder_market_ids']
         self.encoder_periods = self.meta_data['encoder_periods']
         self.encoder_labels = self.meta_data['encoder_labels']
@@ -20,7 +21,8 @@ class Predictor:
         self.model = nn_model.Model(
             len(self.encoder_market_ids.classes_),
             len(self.encoder_periods.classes_),
-            self.n_features
+            self.n_features,
+            self.n_labels
         )
         
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
@@ -59,7 +61,7 @@ class Predictor:
             sequence = df_last_sequence.values
 
             # last row
-            print("Timestamp: ", df.tail(1).index[0])
+            print("\nTimestamp: ", df.tail(1).index[0])
             
             logits = self.prediction(sequence, market_encoded, period_encoded)
             return self.logits_extraction(logits)

@@ -65,7 +65,7 @@ import torch.nn.functional as F
         return x """
 
 class Model(nn.Module):
-   def __init__(self, n_markets, n_periods, n_features, sequence_length=20,
+   def __init__(self, n_markets, n_periods, n_features, n_labels, sequence_length=20,
                 market_embedding_dim=32, period_embedding_dim=16,
                 lstm_hidden=128, lstm_layers=2, attention_heads=8):
        super(Model, self).__init__()
@@ -128,7 +128,7 @@ class Model(nn.Module):
            nn.Linear(128, 64),
            nn.GELU(),
            nn.Dropout(0.1),
-           nn.Linear(64, 3)  # BUY, SELL, HOLD
+           nn.Linear(64, n_labels)  # BUY, SELL, HOLD
        )
        
        # Temperature for calibration

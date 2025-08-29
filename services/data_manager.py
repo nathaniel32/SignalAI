@@ -54,7 +54,13 @@ class DataManager:
 
                 if col in ["volume", "adjusted_close"]:
                     df[col] = df[col].fillna(0)
-
+    
+    def print_get_period(self):
+        print("ID\tName")
+        for time in TimeEnum:
+            print(f"{time.value}\t{time.name}")
+        return input("ID: ")
+    
     def import_csv_to_database(self, file_path, market_id, symbol, period, date_column, open_column, high_column, low_column, close_column, volume_column, adjusted_close_column, sep=","):
         try:
             df = pd.read_csv(file_path, sep=sep, parse_dates=[date_column], dayfirst=True)
@@ -102,7 +108,7 @@ class DataManager:
             self.session.rollback()
             print("Error importing CSV:", e)
 
-    def import_json_to_database_etoro(self, market_id):
+    def import_json_to_database_etoro(self, market_id, period=None):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             "Accept": "application/json"
@@ -120,8 +126,14 @@ class DataManager:
 
         for time in TimeEnum:
             time_name = time.name
-            period = time.value
-            print(f"Name: {time_name}, Value: {period}")
+            time_value = time.value
+            
+            if period:
+                if int(period) != int(time_value):
+                    continue
+
+            print(f"Name: {time_name}, Value: {time_value}")
+
             try:
                 target_url = f"https://candle.etoro.com/candles/asc.json/{time_name}/1001/{market_id}/"
                 response = requests.get(f"{target_url}", proxies=None, headers=headers)
@@ -133,7 +145,7 @@ class DataManager:
                     print(candle['FromDate'])
                     price = TPrice(
                         market_id=market_id,
-                        period=period,
+                        period=time_value,
                         timestamp=candle['FromDate'],
                         open=candle['Open'],
                         high=candle['High'],
@@ -190,12 +202,8 @@ class DataManager:
         except Exception as e:
             raise RuntimeError(f"Error fetching data: {e}")
         
-    def get_datasets(self):
-        print("ID\tName")
-        for time in TimeEnum:
-            print(f"{time.value}\t{time.name}")
-        
-        data = self.get_data(period=input("ID: "))
+    def get_datasets(self, period):
+        data = self.get_data(period=period)
 
         data.sort_values(['market_id', 'period'], inplace=True)
 

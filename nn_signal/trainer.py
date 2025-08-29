@@ -31,8 +31,9 @@ class Trainer:
             n_markets = len(encoder_market_ids.classes_)
             n_periods = len(encoder_periods.classes_)
             n_features = X_sequences_train.shape[2]
-            
-            model = nn_model.Model(n_markets, n_periods, n_features).to(config.DEVICE)
+            n_labels = len(encoder_labels.classes_)
+
+            model = nn_model.Model(n_markets, n_periods, n_features, n_labels).to(config.DEVICE)
 
             print("\nEncoder:")
             print("- Markets:", encoder_market_ids.classes_)
@@ -56,6 +57,7 @@ class Trainer:
             if total_data > 1:
                 meta_data = {
                     "n_features": n_features,
+                    "n_labels": n_labels,
                     'encoder_market_ids': encoder_market_ids,
                     "encoder_periods": encoder_periods,
                     "encoder_labels": encoder_labels
@@ -89,13 +91,11 @@ class Trainer:
                     except Exception as e:
                         print(f"\nError loading model for retraining: {e}")
 
-                #class_counts = np.bincount(Y_labels_encoded_train)
-                #class_weights = len(Y_labels_encoded_train) / (len(class_counts) * class_counts)
-                #class_weights = torch.FloatTensor(class_weights).to(config.DEVICE)
+                class_counts = np.bincount(Y_labels_encoded_train, minlength=n_labels)
+                class_weights = len(Y_labels_encoded_train) / (len(class_counts) * class_counts)
+                class_weights = torch.FloatTensor(class_weights).to(config.DEVICE)
 
-                #criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
-
-                criterion = torch.nn.CrossEntropyLoss()
+                criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
                 optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
                 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, mode="min")
 
