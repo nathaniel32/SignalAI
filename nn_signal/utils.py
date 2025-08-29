@@ -402,6 +402,10 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             # Clean Data
             group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
 
+            if group_candle_sequence_indicator.empty:
+                print("Empty", i)
+                continue
+
             #sequence = group_candle_sequence[config.PRICE_COLUMNS].values
             sequence = group_candle_sequence_indicator[ai_features].values
             
