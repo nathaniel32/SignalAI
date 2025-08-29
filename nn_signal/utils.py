@@ -13,16 +13,22 @@ from imblearn.under_sampling import RandomUnderSampler
 from imblearn.combine import SMOTETomek, SMOTEENN
 from collections import Counter
 import config
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+import os
 
-def plot_dataset_all(df):
+def plot_dataset_all(df, filename="data/dataset.png"):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
     n = len(df.columns)
     figsize = (18, 2*n)
     df.plot(subplots=True, figsize=figsize, title="Dataset")
     plt.tight_layout()
-    plt.savefig("data/dataset.png")
+    plt.savefig(filename)
     plt.close()
 
 def plot_dataset_chart(df, filename="data/chart.png"):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
     df_plot = df.copy()
     colors = {"BUY": "green", "SELL": "red", "HOLD": "blue"}
 
@@ -90,7 +96,7 @@ def plot_dataset_chart(df, filename="data/chart.png"):
     plt.savefig(filename, dpi=150, bbox_inches='tight')
     plt.close()
 
-def show_conf_matrix(preds_array, solution_array, label, title, binary=False, plot=False):
+def show_conf_matrix(preds_array, solution_array, label, title, binary=False, plot=False, filename="data/cmatrix.png"):
     def calculate_accuracy(preds_array, solution_array):
         preds_tensor = torch.tensor(preds_array)
         solution_tensor = torch.tensor(solution_array)
@@ -110,13 +116,14 @@ def show_conf_matrix(preds_array, solution_array, label, title, binary=False, pl
         print(conf_matrix)
 
         if plot:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
             conf_matrix_np = conf_matrix.cpu().numpy()
             fig, ax = plot_confusion_matrix(conf_mat=conf_matrix_np, class_names=label, figsize=(8, 8), cmap="Blues")
             plt.tight_layout(pad=3.0)
             plt.title(title)
             plt.xlabel("Prediction")
             plt.ylabel("Solution")
-            plt.savefig("data/cmatrix.png")
+            plt.savefig(filename)
             plt.close()
 
         return conf_matrix
@@ -147,7 +154,10 @@ class DatasetManager(torch.utils.data.Dataset):
             'label': self.labels[idx]
         }
 
-def print_table_info(df, title):
+def print_table_info(df, title, filename="data/log_df.csv"):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    df.to_csv(filename, index=False)
+
     print("="*50)
     print(title)
     print(df)
@@ -188,11 +198,7 @@ def create_labels(df):
     df.drop(columns=["Future_Return"], inplace=True)
     return df
 
-def create_indicators(df):
-    """
-    Create advanced technical indicators for trading analysis.
-    Returns the original user features and new AI-derived features.
-    """
+""" def create_indicators(df):
     # Make an explicit copy to avoid SettingWithCopyWarning
     df = df.copy()
     
@@ -370,6 +376,151 @@ def create_indicators(df):
     ]
 
     return df, user_features, ai_features
+ """
+
+def create_indicators(df, normalize=True, scaler_type='minmax'):
+    """
+    Membuat indikator teknikal untuk LSTM dengan normalisasi
+    
+    Parameters:
+    df: DataFrame dengan kolom ['open', 'high', 'low', 'close', 'volume', 'adjusted_close']
+    normalize: Boolean, apakah akan dinormalisasi atau tidak
+    scaler_type: 'minmax' atau 'standard' untuk jenis normalisasi
+    
+    Returns:
+    df: DataFrame original dengan indikator tambahan
+    indicators_for_lstm: List nama kolom indikator yang cocok untuk LSTM
+    """
+    
+    # Copy dataframe
+    data = df.copy()
+    
+    # Handle missing data
+    if 'volume' not in data.columns:
+        data['volume'] = 0
+    data['volume'] = data['volume'].fillna(0)
+    
+    if 'adjusted_close' not in data.columns:
+        data['adjusted_close'] = data['close']
+    data['adjusted_close'] = data['adjusted_close'].fillna(data['close'])
+    
+    # ========== INDICATORS ==========
+    
+    # Moving Averages - convert to ratios
+    data['sma_5_ratio'] = data['close'] / data['close'].rolling(5).mean()
+    data['sma_10_ratio'] = data['close'] / data['close'].rolling(10).mean()
+    data['sma_20_ratio'] = data['close'] / data['close'].rolling(20).mean()
+    data['ema_5_ratio'] = data['close'] / data['close'].ewm(span=5).mean()
+    data['ema_10_ratio'] = data['close'] / data['close'].ewm(span=10).mean()
+    data['ema_20_ratio'] = data['close'] / data['close'].ewm(span=20).mean()
+    
+    # RSI (already 0-100)
+    def calculate_rsi(prices, window=14):
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window).mean()
+        rs = gain / (loss + 1e-8)
+        return 100 - (100 / (1 + rs))
+    
+    data['rsi'] = calculate_rsi(data['close']) / 100  # Normalize to 0-1
+    
+    # MACD - normalize by close price
+    ema_12 = data['close'].ewm(span=12).mean()
+    ema_26 = data['close'].ewm(span=26).mean()
+    data['macd_norm'] = (ema_12 - ema_26) / data['close']
+    data['macd_signal_norm'] = data['macd_norm'].ewm(span=9).mean()
+    data['macd_hist_norm'] = data['macd_norm'] - data['macd_signal_norm']
+    
+    # Bollinger Bands Position (already 0-1)
+    bb_sma = data['close'].rolling(20).mean()
+    bb_std = data['close'].rolling(20).std()
+    bb_upper = bb_sma + (bb_std * 2)
+    bb_lower = bb_sma - (bb_std * 2)
+    data['bb_position'] = (data['close'] - bb_lower) / (bb_upper - bb_lower + 1e-8)
+    data['bb_position'] = data['bb_position'].clip(0, 1)  # Clip to 0-1 range
+    
+    # Price Features (already normalized)
+    data['price_change'] = data['close'].pct_change()
+    data['price_position'] = (data['close'] - data['low']) / (data['high'] - data['low'] + 1e-8)
+    data['hl_spread'] = (data['high'] - data['low']) / data['close']
+    
+    # Volume Features
+    volume_sma = data['volume'].rolling(20).mean()
+    data['volume_ratio'] = data['volume'] / (volume_sma + 1e-8)
+    # Cap volume ratio to reasonable range
+    data['volume_ratio'] = data['volume_ratio'].clip(0, 5)
+    
+    # ATR normalized by close
+    tr1 = data['high'] - data['low']
+    tr2 = abs(data['high'] - data['close'].shift())
+    tr3 = abs(data['low'] - data['close'].shift())
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    data['atr_norm'] = true_range.rolling(14).mean() / data['close']
+    
+    # Lagged Features - as ratios
+    data['close_lag_1_ratio'] = data['close'] / data['close'].shift(1)
+    data['close_lag_2_ratio'] = data['close'] / data['close'].shift(2)
+    data['rsi_lag_1'] = calculate_rsi(data['close']).shift(1) / 100
+    
+    # Volume lag (handle zero volume)
+    data['volume_lag_1_ratio'] = data['volume'] / (data['volume'].shift(1) + 1e-8)
+    data['volume_lag_1_ratio'] = data['volume_lag_1_ratio'].clip(0, 5)
+    
+    # Rolling Stats - normalized
+    data['close_volatility_5'] = data['close'].rolling(5).std() / data['close']
+    data['close_volatility_20'] = data['close'].rolling(20).std() / data['close']
+    
+    # Momentum (already as ratios)
+    data['momentum_5'] = data['close'] / data['close'].shift(5) - 1
+    data['momentum_10'] = data['close'] / data['close'].shift(10) - 1
+    
+    # Additional useful indicators
+    data['rsi_momentum'] = data['rsi'] - calculate_rsi(data['close']).shift(1) / 100
+    data['price_acceleration'] = data['price_change'] - data['price_change'].shift(1)
+    
+    # List indikator untuk LSTM (sudah dalam bentuk yang lebih normalized)
+    indicators_for_lstm = [
+        'sma_5_ratio', 'sma_10_ratio', 'sma_20_ratio', 
+        'ema_5_ratio', 'ema_10_ratio', 'ema_20_ratio',
+        'rsi', 'macd_norm', 'macd_signal_norm', 'macd_hist_norm',
+        'bb_position', 'price_change', 'price_position', 'hl_spread',
+        'volume_ratio', 'atr_norm', 
+        'close_lag_1_ratio', 'close_lag_2_ratio', 
+        'rsi_lag_1', 'volume_lag_1_ratio',
+        'close_volatility_5', 'close_volatility_20',
+        'momentum_5', 'momentum_10',
+        'rsi_momentum', 'price_acceleration'
+    ]
+    
+    # Optional: Apply additional normalization
+    if normalize:
+        scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
+        
+        # Only normalize the indicator columns
+        indicator_data = data[indicators_for_lstm].copy()
+        
+        # Handle infinite and NaN values
+        indicator_data = indicator_data.replace([np.inf, -np.inf], np.nan)
+        indicator_data = indicator_data.ffill().bfill()
+        indicator_data = indicator_data.fillna(0)
+        
+        # Apply scaling
+        scaled_data = scaler.fit_transform(indicator_data)
+        
+        # Replace in original dataframe
+        for i, col in enumerate(indicators_for_lstm):
+            data[col + '_scaled'] = scaled_data[:, i]
+        
+        # Update indicators list to use scaled version
+        indicators_for_lstm = [col + '_scaled' for col in indicators_for_lstm]
+        
+        # Store scaler for inverse transform later
+        data.scaler = scaler
+    
+    # Clean data - remove rows with too many NaN
+    data = data.dropna(subset=indicators_for_lstm, thresh=len(indicators_for_lstm) * 0.8)
+    
+    return data, indicators_for_lstm
 
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
@@ -390,7 +541,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             group_candle_sequence = group.iloc[i:i+sequence_length] #group[i:i+sequence_length]
             
             # Add Indicators
-            group_candle_sequence_indicator, user_features, ai_features = create_indicators(df=group_candle_sequence)
+            group_candle_sequence_indicator, ai_features = create_indicators(df=group_candle_sequence)
             
             # Add Labels
             group_candle_sequence_indicator = create_labels(df=group_candle_sequence_indicator)
@@ -420,7 +571,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             Y_labels.append(target_label)
 
             #print(sequence.shape)
-            #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
+            #print_table_info(df=group_candle_sequence_indicator[ai_features], title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
     
     max_rows = max(arr.shape[0] for arr in X_sequences)
     

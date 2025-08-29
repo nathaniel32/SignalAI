@@ -117,14 +117,15 @@ class Trainer:
                     print(f'Validation Loss: {val_loss}')
                     
                     if val_loss < best_loss or epoch % 100 == 0 or epoch == config.EPOCHS-1:
-                        best_preds_array = preds_array
-                        best_solution_array = solution_array
                         utils.show_conf_matrix(preds_array=preds_array, solution_array=solution_array, label=encoder_labels.classes_, title="AI", plot=True)
                         
                         if val_loss < best_loss and config.SAVE_MODEL:
+                            best_preds_array = preds_array
+                            best_solution_array = solution_array
+                            best_loss = val_loss
+
                             os.makedirs(os.path.dirname(config.TRAINED_PATH), exist_ok=True)
                             torch.save(model.state_dict(), config.TRAINED_PATH)
-                            best_loss = val_loss
                             best_epochs = epoch + 1
                             print('new Model')
 
