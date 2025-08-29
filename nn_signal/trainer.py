@@ -100,7 +100,6 @@ class Trainer:
                 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, mode="min")
 
                 best_loss = float('inf')
-                best_epochs = 1
                 best_preds_array = []
                 best_solution_array = []
 
@@ -116,7 +115,6 @@ class Trainer:
                     print(f'Train Loss: {train_loss}')
                     print(f'Validation Loss: {val_loss}')
                     
-                    utils.show_conf_matrix(preds_array=preds_array, solution_array=solution_array, label=encoder_labels.classes_, title=f"Epoch {epoch + 1}", plot=True)
                     if val_loss < best_loss and config.SAVE_MODEL:
                         best_preds_array = preds_array
                         best_solution_array = solution_array
@@ -124,16 +122,16 @@ class Trainer:
 
                         os.makedirs(os.path.dirname(config.TRAINED_PATH), exist_ok=True)
                         torch.save(model.state_dict(), config.TRAINED_PATH)
-                        best_epochs = epoch + 1
                         print('new Model')
 
+                    utils.show_conf_matrix(preds_array=preds_array, solution_array=solution_array, label=encoder_labels.classes_, title=f"{epoch + 1} Epochs | Total: {len(best_preds_array)}", plot=best_loss==val_loss)
                 end_time = time.time()
 
                 trainingsdauer = (end_time - start_time) / 60
 
                 print(f"\nTraining duration: {trainingsdauer:.2f} minutes")
 
-                utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | Best Model", plot=True)
+                #utils.show_conf_matrix(preds_array=best_preds_array, solution_array=best_solution_array, label=encoder_labels.classes_, title=f"{best_epochs} Epochs | Total: {len(best_preds_array)} | Best Model", plot=True)
             else:
                 print("\n!!!Too little X_sequences to train AI!!!")
         except Exception as e:

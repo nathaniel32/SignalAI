@@ -65,12 +65,11 @@ import torch.nn.functional as F
         return x """
 
 class Model(nn.Module):
-   def __init__(self, n_markets, n_periods, n_features, n_labels, sequence_length=20,
+   def __init__(self, n_markets, n_periods, n_features, n_labels,
                 market_embedding_dim=32, period_embedding_dim=16,
-                lstm_hidden=128, lstm_layers=2, attention_heads=8):
+                lstm_hidden=4, lstm_layers=1, attention_heads=8):
        super(Model, self).__init__()
        
-       #self.sequence_length = sequence_length
        self.n_features = n_features
        self.lstm_hidden = lstm_hidden
        
@@ -96,7 +95,7 @@ class Model(nn.Module):
        self.attention = nn.MultiheadAttention(
            embed_dim=lstm_hidden * 2,
            num_heads=attention_heads,
-           dropout=0.2,
+           dropout=0.5,
            batch_first=True
        )
        self.attention_norm = nn.LayerNorm(lstm_hidden * 2)
