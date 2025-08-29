@@ -433,11 +433,11 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_periods_np = np.array(X_periods)
     Y_labels_np = np.array(Y_labels)
 
-    print(f"Data shapes:")
-    print(f"X_sequences: {X_sequences_padding_np.shape}")
-    print(f"X_market_ids: {X_market_ids_np.shape}")  
-    print(f"X_periods: {X_periods_np.shape}")
-    print(f"Y_labels: {Y_labels_np.shape}")
+    print(f"\nData shapes:")
+    print(f"- X_sequences: {X_sequences_padding_np.shape}")
+    print(f"- X_market_ids: {X_market_ids_np.shape}")  
+    print(f"- X_periods: {X_periods_np.shape}")
+    print(f"- Y_labels: {Y_labels_np.shape}")
     
     print(f"\nLabel distribution:")
     unique, counts = np.unique(Y_labels_np, return_counts=True)
