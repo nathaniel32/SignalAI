@@ -14,8 +14,16 @@ class Main:
             ('Import CSV', lambda: self.import_csv_to_database()),
             ('Train AI', lambda: self.trainer.main(datasets_df=self.data_manager.get_datasets())),
             ('Predict Signal', lambda: self.predict()),
-            ('Etoro Data', lambda: self.data_manager.import_json_to_database_etoro(market_id=input("ID: "))),
+            ('Etoro Data', lambda: self.import_json_to_database_etoro()),
         ]
+    
+    def import_json_to_database_etoro(self):
+        while True:
+            market_id=input("ID: ")
+            if market_id:
+                self.data_manager.import_json_to_database_etoro(market_id=market_id)
+            else:
+                break
 
     def import_csv_to_database(self):
         file_path = input("CSV path*: ").strip()
