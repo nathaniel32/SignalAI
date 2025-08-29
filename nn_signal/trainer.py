@@ -62,6 +62,7 @@ class Trainer:
                     "encoder_periods": encoder_periods,
                     "encoder_labels": encoder_labels
                 }
+                os.makedirs(os.path.dirname(config.META_PATH), exist_ok=True)
                 joblib.dump(meta_data, config.META_PATH)
 
                 train_dataset = utils.DatasetManager(
