@@ -160,7 +160,7 @@ def print_table_info(df, title):
     
     print("="*50)
 
-def create_labels(df, hold=True):
+def create_labels(df):
     df = df.copy()
     # Label
     # Geser harga close ke depan
@@ -176,7 +176,7 @@ def create_labels(df, hold=True):
         elif x < -config.THRESHOLD_LABEL:
             return "SELL"
         else:
-            return "HOLD" if hold else None
+            return "HOLD" if config.HOLD_LABEL else None
 
     # hapus label yg nan
     df.dropna(subset=['Future_Return'], axis=0, inplace=True)

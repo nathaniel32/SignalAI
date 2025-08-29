@@ -156,25 +156,25 @@ class DataManager:
 
     def get_data(self, market_id=None, period=None):
         try:
-            if market_id and period:
-                query = (
-                    self.session.query(TPrice)
-                    .filter(
-                        and_(
-                            TPrice.market_id == market_id,
-                            TPrice.period == period
-                        )
-                    ).all()
-                )
-            else:
-                query = self.session.query(TPrice).all()
+            filters = []
             
-            if not query:
+            if market_id:
+                filters.append(TPrice.market_id == market_id)
+            if period:
+                filters.append(TPrice.period == period)
+
+            query = self.session.query(TPrice)
+            if filters:
+                query = query.filter(and_(*filters))
+
+            results = query.all()
+            
+            if not results:
                 raise ValueError(f"No data found for market_id={market_id} period={period}")
             
             data = [
                 {c.name: getattr(row, c.name) for c in row.__table__.columns}
-                for row in query
+                for row in results
             ]
 
             df = pd.DataFrame(data)
@@ -191,7 +191,11 @@ class DataManager:
             raise RuntimeError(f"Error fetching data: {e}")
         
     def get_datasets(self):
-        data = self.get_data()
+        print("ID\tName")
+        for time in TimeEnum:
+            print(f"{time.value}\t{time.name}")
+        
+        data = self.get_data(period=input("ID: "))
 
         data.sort_values(['market_id', 'period'], inplace=True)
 
