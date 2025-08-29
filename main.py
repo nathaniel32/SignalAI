@@ -12,7 +12,7 @@ class Main:
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
             ('Create Tables', lambda: self.data_manager.create_tables()),
             ('Import CSV', lambda: self.import_csv_to_database()),
-            ('Train AI', lambda: self.trainer.main(df=self.data_manager.get_data())),
+            ('Train AI', lambda: self.trainer.main(datasets_df=self.data_manager.get_datasets())),
             ('Predict Signal', lambda: self.predict()),
             ('Etoro Data', lambda: self.data_manager.import_json_to_database_etoro(market_id=input("ID: "))),
         ]

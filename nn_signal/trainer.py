@@ -14,11 +14,9 @@ class Trainer:
     def __init__(self):
         pass
 
-    def main(self, df):
+    def main(self, datasets_df):
         try:
-            train_size = int(0.8 * len(df))
-            train_df = df.iloc[:train_size]
-            val_df  = df.iloc[train_size:]
+            train_df, val_df = datasets_df
 
             prepared_train_data, prepared_val_data, encoders = utils.prepare_data(train_df=train_df, val_df=val_df)
 

@@ -173,4 +173,44 @@ class DataManager:
             return df
         except Exception as e:
             raise RuntimeError(f"Error fetching data: {e}")
+        
+    def get_datasets(self):
+        data = self.get_data()
+
+        data.sort_values(['market_id', 'period'], inplace=True)
+
+        # split per group
+        def train_val_split(group, train_frac=0.8):
+            n = len(group)
+            train_end = int(n * train_frac)
+            train = group.iloc[:train_end]
+            val = group.iloc[train_end:]
+            return train, val
+
+        train_list = []
+        val_list = []
+
+        # group market_id + period
+        for (m_id, per), group in data.groupby(['market_id', 'period']):
+            train_group, val_group = train_val_split(group)
+            train_list.append(train_group)
+            val_list.append(val_group)
+
+        # gabungkan
+        train_df = pd.concat(train_list)
+        val_df = pd.concat(val_list)
+
+        print("\n== Train Dataset ==")
+        print(train_df)
+        train_counts = train_df.groupby(['market_id', 'period']).size().reset_index(name='train_count')
+        print("Train counts per market_id & period:")
+        print(train_counts)
+
+        print("\n== Val Dataset ==")
+        print(val_df)
+        val_counts = val_df.groupby(['market_id', 'period']).size().reset_index(name='val_count')
+        print("\nValidation counts per market_id & period:")
+        print(val_counts)
+
+        return train_df, val_df
 
