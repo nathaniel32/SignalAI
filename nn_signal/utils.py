@@ -360,7 +360,6 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
                 print("Empty", i)
                 continue
 
-            #sequence = group_candle_sequence[config.PRICE_COLUMNS].values
             sequence = group_candle_sequence_indicator[ai_features].values
             
             # Percentage change normalization
