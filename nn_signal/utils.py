@@ -379,19 +379,6 @@ def create_labels(df):
  """
 
 def create_indicators(df, normalize=True, scaler_type='minmax'):
-    """
-    Membuat indikator teknikal untuk LSTM dengan normalisasi
-    
-    Parameters:
-    df: DataFrame dengan kolom ['open', 'high', 'low', 'close', 'volume', 'adjusted_close']
-    normalize: Boolean, apakah akan dinormalisasi atau tidak
-    scaler_type: 'minmax' atau 'standard' untuk jenis normalisasi
-    
-    Returns:
-    df: DataFrame original dengan indikator tambahan
-    indicators_for_lstm: List nama kolom indikator yang cocok untuk LSTM
-    """
-    
     # Copy dataframe
     data = df.copy()
     
@@ -479,7 +466,7 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
     data['price_acceleration'] = data['price_change'] - data['price_change'].shift(1)
     
     # List indikator untuk LSTM (sudah dalam bentuk yang lebih normalized)
-    indicators_for_lstm = [
+    ai_indicators = [
         'sma_5_ratio', 'sma_10_ratio', 'sma_20_ratio', 
         'ema_5_ratio', 'ema_10_ratio', 'ema_20_ratio',
         'rsi', 'macd_norm', 'macd_signal_norm', 'macd_hist_norm',
@@ -497,7 +484,7 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
         
         # Only normalize the indicator columns
-        indicator_data = data[indicators_for_lstm].copy()
+        indicator_data = data[ai_indicators].copy()
         
         # Handle infinite and NaN values
         indicator_data = indicator_data.replace([np.inf, -np.inf], np.nan)
@@ -508,19 +495,19 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         scaled_data = scaler.fit_transform(indicator_data)
         
         # Replace in original dataframe
-        for i, col in enumerate(indicators_for_lstm):
+        for i, col in enumerate(ai_indicators):
             data[col + '_scaled'] = scaled_data[:, i]
         
         # Update indicators list to use scaled version
-        indicators_for_lstm = [col + '_scaled' for col in indicators_for_lstm]
+        ai_indicators = [col + '_scaled' for col in ai_indicators]
         
         # Store scaler for inverse transform later
         data.scaler = scaler
     
     # Clean data - remove rows with too many NaN
-    data = data.dropna(subset=indicators_for_lstm, thresh=len(indicators_for_lstm) * 0.8)
+    data = data.dropna(subset=ai_indicators, thresh=len(ai_indicators) * 0.8)
     
-    return data, indicators_for_lstm
+    return data, ai_indicators
 
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []

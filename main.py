@@ -57,8 +57,9 @@ class Main:
                     print("\nResults:")
                     for i in sorted_idx:
                         print(f"- {classes[i]}\t: {probs[i]*100:.2f}%")
-
                 except RuntimeError as e:
+                    print(e)
+                except Exception as e:
                     print("Prediction error:", e)
             else:
                 break
