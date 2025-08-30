@@ -2,7 +2,6 @@ import os
 import time
 import torch
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 import joblib
 import nn_signal.utils as utils
 import nn_signal.model as nn_model
@@ -15,6 +14,12 @@ class Trainer:
         pass
 
     def main(self, datasets_df):
+        torch.manual_seed(config.SEED)
+        torch.cuda.manual_seed(config.SEED)
+        torch.cuda.manual_seed_all(config.SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
         try:
             train_df, val_df = datasets_df
 
