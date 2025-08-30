@@ -96,13 +96,6 @@ class DataManager:
                     adjusted_close=row[adjusted_close_column]
                 )
                 self.session.merge(price)
-                """ self.session.add(price)
-                try:
-                    self.session.commit()
-                except IntegrityError:
-                    self.session.rollback()
-                    print("Duplicate") """
-                
             self.session.commit()
         except Exception as e:
             self.session.rollback()
@@ -154,13 +147,6 @@ class DataManager:
                         volume=candle['Volume']
                     )
                     self.session.merge(price)
-                    """ self.session.add(price)
-                    try:
-                        self.session.commit()
-                        print("OK")
-                    except IntegrityError:
-                        self.session.rollback()
-                        print("Duplicate") """
                 self.session.commit()
             except Exception as e:
                 self.session.rollback()
