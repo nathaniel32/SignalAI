@@ -67,7 +67,7 @@ import torch.nn.functional as F
 class Model(nn.Module):
    def __init__(self, n_markets, n_periods, n_features, n_labels,
                 market_embedding_dim=32, period_embedding_dim=16,
-                lstm_hidden=32, lstm_layers=2, attention_heads=8):
+                lstm_hidden=128, lstm_layers=2, attention_heads=8):
        super(Model, self).__init__()
        
        self.n_features = n_features
