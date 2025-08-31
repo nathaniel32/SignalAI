@@ -137,8 +137,9 @@ def to_yhat(logits):
     return probs.numpy(), y_hat.numpy()
 
 class DatasetManager(torch.utils.data.Dataset):
-    def __init__(self, sequences, market_ids, periods, labels):
+    def __init__(self, sequences, masks, market_ids, periods, labels):
         self.sequences = torch.FloatTensor(sequences)
+        self.masks = torch.FloatTensor(masks)
         self.market_ids = torch.LongTensor(market_ids)
         self.periods = torch.LongTensor(periods)
         self.labels = torch.LongTensor(labels)
@@ -149,6 +150,7 @@ class DatasetManager(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return {
             'sequence': self.sequences[idx],
+            'masks': self.masks[idx],
             'market_id': self.market_ids[idx],
             'period': self.periods[idx],
             'label': self.labels[idx]
@@ -181,15 +183,14 @@ def create_labels(df):
 
     # Buat label berdasarkan aturan
     def create_label(x):
-        if x > config.THRESHOLD_LABEL:
+        if np.isnan(x):
+            return np.nan
+        elif x > config.THRESHOLD_LABEL:
             return "BUY"
         elif x < -config.THRESHOLD_LABEL:
             return "SELL"
         else:
             return "HOLD" if config.HOLD_LABEL else None
-
-    # hapus label yg nan
-    df.dropna(subset=['Future_Return'], axis=0, inplace=True)
 
     # dapatkan signal
     df["Label"] = df["Future_Return"].apply(create_label)
@@ -324,9 +325,6 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         # Store scaler for inverse transform later
         data.scaler = scaler
     
-    # Clean data - remove rows with too many NaN
-    data = data.dropna(subset=ai_indicators, thresh=len(ai_indicators) * 0.8)
-    
     return data, ai_indicators
 
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
@@ -334,6 +332,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_market_ids = []
     X_periods = []
     Y_labels = []
+    X_masks = []
     
     # Group by market_id dan period
     for (market_id, period), group in df.groupby(['market_id', 'period']):
@@ -345,7 +344,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
         
         for i in range(len(group) - sequence_length):
             # Get n candles sequence
-            group_candle_sequence = group.iloc[i:i+sequence_length] #group[i:i+sequence_length]
+            group_candle_sequence = group.iloc[i:i+sequence_length]
             
             # Add Indicators
             group_candle_sequence_indicator, ai_features = create_indicators(df=group_candle_sequence)
@@ -353,45 +352,54 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             # Add Labels
             group_candle_sequence_indicator = create_labels(df=group_candle_sequence_indicator)
 
-            # Clean Data
-            group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+            # Inf -> Nan
+            group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan)
 
-            if group_candle_sequence_indicator.empty:
+            # mask: valid = 1, invalid = 0
+            valid_mask = ~group_candle_sequence_indicator[ai_features + ['Label']].isnull().any(axis=1)
+            group_candle_sequence_indicator["mask"] = valid_mask.astype(int).values
+
+            if valid_mask.sum() == 0:
                 print("Empty", i)
                 continue
 
             sequence = group_candle_sequence_indicator[ai_features].values
-            
-            # Percentage change normalization
-            #normalized_sequence = (sequence / sequence[0]) - 1
-            #X_sequences.append(normalized_sequence)
-            market_id = group_candle_sequence_indicator['market_id'].tail(1).item()
-            period = group_candle_sequence_indicator['period'].tail(1).item()
+            sequence = np.nan_to_num(sequence, nan=0.0)
+            mask = group_candle_sequence_indicator["mask"].values
+
+            market_id = group_candle_sequence_indicator['market_id'].iloc[-1]
+            period = group_candle_sequence_indicator['period'].iloc[-1]
+
+            target_label = group_candle_sequence_indicator['Label'][valid_mask].iloc[-1]
 
             X_sequences.append(sequence)
+            X_masks.append(mask)
             X_market_ids.append(market_id)
             X_periods.append(period)
-            
-            # Target Label
-            target_label = group_candle_sequence_indicator['Label'].tail(1).item()
             Y_labels.append(target_label)
 
             #print(sequence.shape)
-            #print_table_info(df=group_candle_sequence_indicator[ai_features], title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
+            #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
     
-    max_rows = max(arr.shape[0] for arr in X_sequences)
-    
-    X_sequences_padding_np = np.array([
-        np.pad(arr, ((max_rows - arr.shape[0], 0), (0, 0)), mode='constant', constant_values=0)
-        for arr in X_sequences
+    max_rows = max(len(seq) for seq in X_sequences)
+    X_sequences_np = np.array([
+        np.pad(seq, ((max_rows - len(seq), 0), (0, 0)), mode='constant', constant_values=0)
+        for seq in X_sequences
+    ])
+    X_masks_np = np.array([
+        np.pad(mask, (max_rows - len(mask), 0), mode='constant', constant_values=0)
+        for mask in X_masks
     ])
 
+    #X_sequences_np = np.array(X_sequences)
+    #X_masks_np = np.array(X_masks)
     X_market_ids_np = np.array(X_market_ids)
     X_periods_np = np.array(X_periods)
     Y_labels_np = np.array(Y_labels)
 
     print(f"\nData shapes:")
-    print(f"- X_sequences: {X_sequences_padding_np.shape}")
+    print(f"- X_sequences: {X_sequences_np.shape}")
+    print(f"- X_masks: {X_masks_np.shape}")
     print(f"- X_market_ids: {X_market_ids_np.shape}")  
     print(f"- X_periods: {X_periods_np.shape}")
     print(f"- Y_labels: {Y_labels_np.shape}")
@@ -401,7 +409,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     for signal, count in zip(unique, counts):
         print(f"{signal}: {count} ({count/len(Y_labels_np)*100:.1f}%)")
 
-    return X_sequences_padding_np, X_market_ids_np, X_periods_np, Y_labels_np
+    return X_sequences_np, X_masks_np, X_market_ids_np, X_periods_np, Y_labels_np
 
 def prepare_data(train_df, val_df):
     encoder_market_ids = preprocessing.LabelEncoder()
@@ -409,7 +417,7 @@ def prepare_data(train_df, val_df):
     encoder_labels = preprocessing.LabelEncoder()
 
     print("\n======== Train Dataset ========\n")
-    X_sequences_train, X_market_ids_train, X_periods_train, Y_labels_train = create_sequences(df=train_df)
+    X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train = create_sequences(df=train_df)
     X_market_ids_encoded_train = encoder_market_ids.fit_transform(X_market_ids_train)
     X_periods_encoded_train = encoder_periods.fit_transform(X_periods_train)
     Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
@@ -419,7 +427,7 @@ def prepare_data(train_df, val_df):
     train_labels = set(encoder_labels.classes_)
 
     print("\n======== Val Dataset ========\n")
-    X_sequences_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
+    X_sequences_val, X_masks_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
 
     mask_market_ids = np.array([mid in train_market_ids for mid in X_market_ids_val])
     mask_periods = np.array([period in train_periods for period in X_periods_val])
@@ -428,6 +436,7 @@ def prepare_data(train_df, val_df):
     valid_mask = mask_market_ids & mask_periods & mask_labels
 
     X_sequences_val_filtered = X_sequences_val[valid_mask]
+    X_masks_val_filtered = X_masks_val[valid_mask]
     X_market_ids_val_filtered = X_market_ids_val[valid_mask]
     X_periods_val_filtered = X_periods_val[valid_mask]
     Y_labels_val_filtered = Y_labels_val[valid_mask]
@@ -436,7 +445,7 @@ def prepare_data(train_df, val_df):
     X_periods_encoded_val_filtered = encoder_periods.transform(X_periods_val_filtered)
     Y_labels_encoded_val_filtered = encoder_labels.transform(Y_labels_val_filtered)
     
-    return (X_sequences_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val_filtered, X_market_ids_encoded_val_filtered, X_periods_encoded_val_filtered, Y_labels_encoded_val_filtered), (encoder_market_ids, encoder_periods, encoder_labels)
+    return (X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val_filtered, X_masks_val_filtered, X_market_ids_encoded_val_filtered, X_periods_encoded_val_filtered, Y_labels_encoded_val_filtered), (encoder_market_ids, encoder_periods, encoder_labels)
 
 def balance_data(features, labels, method, random_state):
     if method == 'smote':
@@ -481,12 +490,13 @@ def train_fn(data_loader, model, optimizer, criterion):
 
     for batch in data_loader:
         sequences = batch['sequence'].to(config.DEVICE)
+        masks = batch['masks'].to(config.DEVICE)
         market_ids = batch['market_id'].to(config.DEVICE)
         periods = batch['period'].to(config.DEVICE)
         labels = batch['label'].to(config.DEVICE)
 
         optimizer.zero_grad()
-        output = model(sequences, market_ids, periods)
+        output = model(sequences, masks, market_ids, periods)
         loss = criterion(output, labels)
         loss.backward()
         
@@ -508,11 +518,12 @@ def val_fn(data_loader, model, criterion):
     with torch.no_grad():
         for batch in data_loader:
             sequences = batch['sequence'].to(config.DEVICE)
+            masks = batch['masks'].to(config.DEVICE)
             market_ids = batch['market_id'].to(config.DEVICE)
             periods = batch['period'].to(config.DEVICE)
             labels = batch['label'].to(config.DEVICE)
 
-            output =  model(sequences, market_ids, periods)
+            output =  model(sequences, masks, market_ids, periods)
             loss =  criterion(output, labels)
  
             final_loss += loss.item()

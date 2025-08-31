@@ -25,8 +25,8 @@ class Trainer:
 
             prepared_train_data, prepared_val_data, encoders = utils.prepare_data(train_df=train_df, val_df=val_df)
 
-            X_sequences_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train = prepared_train_data
-            X_sequences_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val = prepared_val_data
+            X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train = prepared_train_data
+            X_sequences_val, X_masks_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val = prepared_val_data
             encoder_market_ids, encoder_periods, encoder_labels = encoders
 
             n_train_data = len(X_sequences_train)
@@ -52,6 +52,7 @@ class Trainer:
 
             summary(model, input_data=[
                 torch.randn(1, config.SEQUENCE_CANDLE_LENGTH, n_features).to(config.DEVICE),
+                torch.randn(1, config.SEQUENCE_CANDLE_LENGTH).to(config.DEVICE),
                 torch.randint(0, n_markets, (1,)).to(config.DEVICE),
                 torch.randint(0, n_periods, (1,)).to(config.DEVICE)
             ])
@@ -71,13 +72,19 @@ class Trainer:
                 joblib.dump(meta_data, config.META_PATH)
 
                 train_dataset = utils.DatasetManager(
-                    X_sequences_train, X_market_ids_encoded_train,
-                    X_periods_encoded_train, Y_labels_encoded_train
+                    sequences=X_sequences_train,
+                    masks=X_masks_train,
+                    market_ids=X_market_ids_encoded_train,
+                    periods=X_periods_encoded_train,
+                    labels=Y_labels_encoded_train
                 )
 
                 val_dataset = utils.DatasetManager(
-                    X_sequences_val, X_market_ids_encoded_val,
-                    X_periods_encoded_val, Y_labels_encoded_val
+                    sequences=X_sequences_val,
+                    masks=X_masks_val,
+                    market_ids=X_market_ids_encoded_val,
+                    periods=X_periods_encoded_val,
+                    labels=Y_labels_encoded_val
                 )
 
                 train_loader = DataLoader(dataset=train_dataset,
