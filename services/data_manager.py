@@ -82,7 +82,7 @@ class DataManager:
                     dt = datetime.strptime(str(row[date_column]), "%Y-%m-%d")
                 
                 timestamp = dt.date()
-                print(timestamp)
+                #print(timestamp)
                 
                 price = TPrice(
                     market_id=market_id,
@@ -135,7 +135,7 @@ class DataManager:
                 
                 print("Importing...")
                 for candle in candles:
-                    print(candle['FromDate'])
+                    #print(candle['FromDate'])
                     price = TPrice(
                         market_id=market_id,
                         period=time_value,

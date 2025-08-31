@@ -53,14 +53,16 @@ class Predictor:
             raise RuntimeError("Period encoder not trained yet or label unknown")
 
         try:
-            df, ai_indicators = utils.create_indicators(df=df)
-            df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+            df_last_sequence = df.tail(config.SEQUENCE_CANDLE_LENGTH)
+            df_last_sequence, ai_indicators = utils.create_indicators(df=df_last_sequence)
+            df_last_sequence, valid_mask = utils.create_mask(df=df_last_sequence, features=ai_indicators)
 
-            df_last_sequence = df[ai_indicators].tail(config.SEQUENCE_CANDLE_LENGTH)
-            print(df_last_sequence)
-            
-            sequence = df_last_sequence.values
-            mask = np.ones(sequence.shape[0], dtype=np.float32)
+            sequence = df_last_sequence[ai_indicators].values
+            mask = df_last_sequence['mask'].values
+
+            print(df)
+            print(df_last_sequence[ai_indicators])
+            print(df_last_sequence['mask'])
 
             # last row
             print("\nTimestamp: ", df.tail(1).index[0])

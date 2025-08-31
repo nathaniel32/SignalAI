@@ -327,6 +327,12 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
     
     return data, ai_indicators
 
+def create_mask(df, features):
+    data = df.copy()
+    valid_mask = ~df[features].isnull().any(axis=1)
+    data["mask"] = valid_mask.astype(int).values
+    return data, valid_mask
+
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
     X_market_ids = []
@@ -356,9 +362,8 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan)
 
             # mask: valid = 1, invalid = 0
-            valid_mask = ~group_candle_sequence_indicator[ai_features + ['Label']].isnull().any(axis=1)
-            group_candle_sequence_indicator["mask"] = valid_mask.astype(int).values
-
+            group_candle_sequence_indicator, valid_mask = create_mask(df=group_candle_sequence_indicator, features=ai_features+['Label'])
+            
             if valid_mask.sum() == 0:
                 print("Empty", i)
                 continue
