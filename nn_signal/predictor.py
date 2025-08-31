@@ -28,12 +28,13 @@ class Predictor:
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
         self.model.to(config.DEVICE).eval()
     
-    def prediction(self, sequence, market_encoded, period_encoded):
+    def prediction(self, sequence, mask, market_encoded, period_encoded):
         sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(config.DEVICE)
+        mask_tensor = torch.FloatTensor(mask).unsqueeze(0).to(config.DEVICE)
         market_tensor = torch.LongTensor([market_encoded]).to(config.DEVICE)
         period_tensor = torch.LongTensor([period_encoded]).to(config.DEVICE)
         with torch.no_grad():
-            logits = self.model(sequence_tensor, market_tensor, period_tensor)
+            logits = self.model(sequence_tensor, mask_tensor, market_tensor, period_tensor)
         return logits
     
     def logits_extraction(self, logits):
@@ -59,11 +60,12 @@ class Predictor:
             print(df_last_sequence)
             
             sequence = df_last_sequence.values
+            mask = np.ones(sequence.shape[0], dtype=np.float32)
 
             # last row
             print("\nTimestamp: ", df.tail(1).index[0])
             
-            logits = self.prediction(sequence, market_encoded, period_encoded)
+            logits = self.prediction(sequence, mask, market_encoded, period_encoded)
             return self.logits_extraction(logits)
         except Exception as e:
             print(e)

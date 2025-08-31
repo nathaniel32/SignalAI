@@ -407,7 +407,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     print(f"\nLabel distribution:")
     unique, counts = np.unique(Y_labels_np, return_counts=True)
     for signal, count in zip(unique, counts):
-        print(f"{signal}: {count} ({count/len(Y_labels_np)*100:.1f}%)")
+        print(f"- {signal}: {count} ({count/len(Y_labels_np)*100:.1f}%)")
 
     return X_sequences_np, X_masks_np, X_market_ids_np, X_periods_np, Y_labels_np
 
