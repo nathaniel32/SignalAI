@@ -72,9 +72,14 @@ class Trainer:
         torch.backends.cudnn.benchmark = False
 
         try:
-            train_df, val_df = datasets_df
-
-            prepared_train_data, prepared_val_data, encoders = utils.prepare_data(train_df=train_df, val_df=val_df)
+            if datasets_df:
+                train_df, val_df = datasets_df
+                prepared_train_data, prepared_val_data, encoders = utils.prepare_data(train_df=train_df, val_df=val_df)
+            else:
+                meta_data = joblib.load(config.META_PATH)
+                prepared_train_data = meta_data['prepared_train_data']
+                prepared_val_data = meta_data['prepared_val_data']
+                encoders = meta_data['encoders']
 
             X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train = prepared_train_data
             X_sequences_val, X_masks_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val = prepared_val_data
@@ -113,6 +118,9 @@ class Trainer:
 
             if total_data > 1:
                 meta_data = {
+                    "prepared_train_data": prepared_train_data,
+                    "prepared_val_data": prepared_val_data,
+                    'encoders': encoders,
                     "n_features": n_features,
                     "n_labels": n_labels,
                     'encoder_market_ids': encoder_market_ids,

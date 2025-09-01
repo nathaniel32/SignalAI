@@ -12,7 +12,7 @@ class Main:
             ('Drop All Tables', lambda: self.data_manager.drop_all_tables()),
             ('Create Tables', lambda: self.data_manager.create_tables()),
             ('Import CSV', lambda: self.import_csv_to_database()),
-            ('Train AI', lambda: self.trainer.main(datasets_df=self.data_manager.get_datasets(period=self.data_manager.print_get_period()))),
+            ('Train AI', lambda: self.train()),
             ('Predict Signal', lambda: self.predict()),
             ('Etoro Data', lambda: self.import_json_to_database_etoro()),
         ]
@@ -39,7 +39,14 @@ class Main:
         volume_column = input("Volume column (default: Volume): ") or "Volume"
         adjusted_close_column = input("Adjusted Close column (default: Adjusted Close): ") or "Adjusted Close"
         self.data_manager.import_csv_to_database(file_path, market_id, symbol, period, date_column=date_column, open_column=open_column, high_column=high_column, low_column=low_column, close_column=close_column, volume_column=volume_column, adjusted_close_column=adjusted_close_column)
-    
+    def train(self):
+        prepare_new_data = input("\nPrepare new data (y/n): ")
+        if prepare_new_data.lower() == 'y':
+            datasets_df=self.data_manager.get_datasets(period=self.data_manager.print_get_period())
+        else:
+            datasets_df=None
+        
+        self.trainer.main(datasets_df=datasets_df)
     def predict(self):
         predictor = Predictor(config.TRAINED_PATH)
         while True:
