@@ -58,11 +58,12 @@ class Predictor:
             df_last_sequence, valid_mask = utils.create_mask(df=df_last_sequence, features=ai_indicators)
 
             sequence = df_last_sequence[ai_indicators].values
+            equence = np.nan_to_num(sequence, nan=0.0)
             mask = df_last_sequence['mask'].values
 
             print(df)
-            print(df_last_sequence[ai_indicators])
-            print(df_last_sequence['mask'])
+            print(equence)
+            print(mask)
 
             # last row
             print("\nTimestamp: ", df.tail(1).index[0])
