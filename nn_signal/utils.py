@@ -290,14 +290,8 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
     # Copy dataframe
     data = df.copy()
     
-    # Handle missing data
-    if 'volume' not in data.columns:
-        data['volume'] = 0
     data['volume'] = data['volume'].fillna(0)
-    
-    if 'adjusted_close' not in data.columns:
-        data['adjusted_close'] = data['close']
-    data['adjusted_close'] = data['adjusted_close'].fillna(data['close'])
+    data['adjusted_close'] = data['adjusted_close'].fillna(0)
     
     # ========== INDICATORS ==========
     
@@ -388,7 +382,7 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
     ]
     
     # Optional: Apply additional normalization
-    if normalize:
+    """ if normalize:
         scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
         
         # Only normalize the indicator columns
@@ -405,6 +399,41 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         # Replace in original dataframe
         for i, col in enumerate(ai_indicators):
             data[col + '_scaled'] = scaled_data[:, i]
+        
+        # Update indicators list to use scaled version
+        ai_indicators = [col + '_scaled' for col in ai_indicators]
+        
+        # Store scaler for inverse transform later
+        data.scaler = scaler """
+    
+    if normalize:
+        scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
+        
+        # Only normalize the indicator columns
+        indicator_data = data[ai_indicators].copy()
+        
+        # Handle infinite values only, keep NaN as NaN
+        indicator_data = indicator_data.replace([np.inf, -np.inf], np.nan)
+        
+        # Create a mask to track original NaN positions
+        nan_mask = indicator_data.isna()
+        
+        # For scaling, we need to temporarily fill NaN values
+        # We'll use forward fill and backward fill only for scaling
+        temp_data = indicator_data.ffill().bfill().fillna(0)
+        
+        # Apply scaling on the temporarily filled data
+        scaled_data = scaler.fit_transform(temp_data)
+        
+        # Convert back to DataFrame to easily apply the NaN mask
+        scaled_df = pd.DataFrame(scaled_data, columns=ai_indicators, index=indicator_data.index)
+        
+        # Restore NaN values at their original positions
+        scaled_df[nan_mask] = np.nan
+        
+        # Replace in original dataframe
+        for i, col in enumerate(ai_indicators):
+            data[col + '_scaled'] = scaled_df.iloc[:, i]
         
         # Update indicators list to use scaled version
         ai_indicators = [col + '_scaled' for col in ai_indicators]
@@ -497,9 +526,14 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             Y_labels.append(target_label)
 
             #print(sequence.shape)
+            #print(sequence)
+            #print(mask)
+            #print(market_id)
+            #print(target_label)
             #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
+            #break
     
-    max_rows = max(len(seq) for seq in X_sequences)
+    """ max_rows = max(len(seq) for seq in X_sequences)
     X_sequences_np = np.array([
         np.pad(seq, ((max_rows - len(seq), 0), (0, 0)), mode='constant', constant_values=0)
         for seq in X_sequences
@@ -507,10 +541,10 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_masks_np = np.array([
         np.pad(mask, (max_rows - len(mask), 0), mode='constant', constant_values=0)
         for mask in X_masks
-    ])
+    ]) """
 
-    #X_sequences_np = np.array(X_sequences)
-    #X_masks_np = np.array(X_masks)
+    X_sequences_np = np.array(X_sequences)
+    X_masks_np = np.array(X_masks)
     X_market_ids_np = np.array(X_market_ids)
     X_periods_np = np.array(X_periods)
     Y_labels_np = np.array(Y_labels)
