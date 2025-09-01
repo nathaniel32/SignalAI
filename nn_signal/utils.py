@@ -467,6 +467,9 @@ def create_labels(df):
             else:
                 return "HOLD"
 
+    # hapus label yg nan
+    df.dropna(subset=['Future_Return'], axis=0, inplace=True)
+
     # dapatkan signal
     df["Label"] = df["Future_Return"].apply(create_label)
     
@@ -493,11 +496,11 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             # Get n candles sequence
             group_candle_sequence = group.iloc[i:i+sequence_length]
             
-            # Add Indicators
-            group_candle_sequence_indicator, ai_features = create_indicators(df=group_candle_sequence)
-            
             # Add Labels
-            group_candle_sequence_indicator = create_labels(df=group_candle_sequence_indicator)
+            group_candle_sequence_label = create_labels(df=group_candle_sequence)
+
+            # Add Indicators
+            group_candle_sequence_indicator, ai_features = create_indicators(df=group_candle_sequence_label)
 
             # Inf -> Nan
             group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan)
@@ -532,16 +535,6 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             #print_table_info(df=group_candle_sequence_indicator, title=f"Signal: {target_label}\nMarket ID: {market_id}\nPeriod: {period}")
             #break
     
-    """ max_rows = max(len(seq) for seq in X_sequences)
-    X_sequences_np = np.array([
-        np.pad(seq, ((max_rows - len(seq), 0), (0, 0)), mode='constant', constant_values=0)
-        for seq in X_sequences
-    ])
-    X_masks_np = np.array([
-        np.pad(mask, (max_rows - len(mask), 0), mode='constant', constant_values=0)
-        for mask in X_masks
-    ]) """
-
     X_sequences_np = np.array(X_sequences)
     X_masks_np = np.array(X_masks)
     X_market_ids_np = np.array(X_market_ids)
