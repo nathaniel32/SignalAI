@@ -178,7 +178,7 @@ class Trainer:
                     print(f'\n== Epoch {epoch + 1}/{config.EPOCHS}')
                     print(f'Train Loss: {train_loss}')
                     print(f'Validation Loss: {val_loss}')
-                    print(f'Val - Best: {val_loss - best_loss}')
+                    
                     if val_loss < best_loss and config.SAVE_MODEL:
                         best_preds_array = preds_array
                         best_solution_array = solution_array
