@@ -506,7 +506,7 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan)
 
             # mask: valid = 1, invalid = 0
-            group_candle_sequence_indicator, valid_mask = create_mask(df=group_candle_sequence_indicator, features=ai_features+['Label'])
+            group_candle_sequence_indicator, valid_mask = create_mask(df=group_candle_sequence_indicator, features=ai_features)
             
             if valid_mask.sum() == 0:
                 print("Empty", i)
