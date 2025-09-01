@@ -10,6 +10,9 @@ from sklearn.utils import resample
 import config
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import os
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from collections import Counter
 
 class DatasetManager(torch.utils.data.Dataset):
     def __init__(self, sequences, masks, market_ids, periods, labels):
@@ -171,32 +174,116 @@ def print_table_info(df, title, filename="data/log_df.csv"):
 
 #########################################################################################
 
-def create_labels(df):
-    df = df.copy()
-    # Label
-    # Geser harga close ke depan
-    df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
-
-    # Hitung return masa depan
-    df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
-
-    # Buat label berdasarkan aturan
-    def create_label(x):
-        if np.isnan(x):
-            return np.nan
-        elif x > config.THRESHOLD_LABEL:
-            return "BUY"
-        elif x < -config.THRESHOLD_LABEL:
-            return "SELL"
-        else:
-            return "HOLD" if config.HOLD_LABEL else None
-
-    # dapatkan signal
-    df["Label"] = df["Future_Return"].apply(create_label)
+def balance_dataset(X_sequences, X_masks, X_market_ids, X_periods, Y_labels, 
+                    balance_strategy='hybrid', target_ratio=1.5):
+    """
+    Balance dataset with multiple strategies
     
-    df.drop(columns=["Future_Close"], inplace=True)
-    df.drop(columns=["Future_Return"], inplace=True)
-    return df
+    balance_strategy:
+    - 'undersample': Reduce majority class
+    - 'oversample': Increase minority classes  
+    - 'hybrid': Combination of both
+    - 'smote': Synthetic Minority Oversampling
+    - 'weighted': Use class weights (no data modification)
+    """
+    
+    # Check current distribution
+    label_counts = Counter(Y_labels)
+    print(f"\n{'='*60}")
+    print(f"BALANCING DATASET")
+    print(f"{'='*60}")
+    print(f"Original distribution: {label_counts}")
+    
+    if balance_strategy == 'weighted':
+        # Calculate class weights for loss function
+        from sklearn.utils.class_weight import compute_class_weight
+        classes = np.unique(Y_labels)
+        class_weights = compute_class_weight(
+            'balanced', 
+            classes=classes, 
+            y=Y_labels
+        )
+        print(f"Using class weights: {dict(zip(classes, class_weights))}")
+        return X_sequences, X_masks, X_market_ids, X_periods, Y_labels, dict(zip(classes, class_weights))
+    
+    # Reshape for resampling
+    n_samples = X_sequences.shape[0]
+    n_features = X_sequences.shape[1] * X_sequences.shape[2]
+    X_flat = X_sequences.reshape(n_samples, n_features)
+    
+    # Combine all features for resampling
+    X_combined = np.column_stack([
+        X_flat, 
+        X_masks,
+        X_market_ids.reshape(-1, 1),
+        X_periods.reshape(-1, 1)
+    ])
+    
+    if balance_strategy == 'undersample':
+        # Keep all minority, reduce majority
+        min_count = min(label_counts.values())
+        sampling_strategy = {
+            label: min(count, int(min_count * target_ratio))
+            for label, count in label_counts.items()
+        }
+        sampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
+        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
+        
+    elif balance_strategy == 'oversample' or balance_strategy == 'smote':
+        # Increase minority to match majority
+        max_count = max(label_counts.values())
+        sampling_strategy = {
+            label: max(count, int(max_count / target_ratio))
+            for label, count in label_counts.items()
+        }
+        sampler = SMOTE(sampling_strategy=sampling_strategy, random_state=42, k_neighbors=5)
+        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
+        
+    elif balance_strategy == 'hybrid':
+        # First oversample minority, then undersample majority
+        median_count = int(np.median(list(label_counts.values())))
+        
+        # Step 1: Oversample minority classes
+        oversample_strategy = {}
+        for label, count in label_counts.items():
+            if count < median_count:
+                oversample_strategy[label] = median_count
+        
+        if oversample_strategy:
+            # Only oversample if there are minority classes
+            oversampler = SMOTE(sampling_strategy='auto', random_state=42, k_neighbors=min(5, min(label_counts.values())-1))
+            X_combined, Y_labels = oversampler.fit_resample(X_combined, Y_labels)
+        
+        # Step 2: Undersample majority classes  
+        label_counts = Counter(Y_labels)
+        undersample_strategy = {
+            label: min(count, int(median_count * target_ratio))
+            for label, count in label_counts.items()
+        }
+        sampler = RandomUnderSampler(sampling_strategy=undersample_strategy, random_state=42)
+        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
+    
+    else:
+        raise ValueError(f"Unknown balance strategy: {balance_strategy}")
+    
+    # Reshape back
+    X_sequences_resampled = X_resampled[:, :n_features].reshape(-1, X_sequences.shape[1], X_sequences.shape[2])
+    X_masks_resampled = X_resampled[:, n_features:n_features+X_masks.shape[1]]
+    X_market_ids_resampled = X_resampled[:, -2].astype(int)
+    X_periods_resampled = X_resampled[:, -1].astype(int)
+    
+    # Print balanced distribution
+    print(f"\nBalanced distribution:")
+    unique, counts = np.unique(Y_resampled, return_counts=True)
+    for signal, count in zip(unique, counts):
+        print(f"   - {signal:>8}: {count:>7,} samples ({count/len(Y_resampled)*100:>6.2f}%)")
+    
+    # Calculate new imbalance ratio
+    max_count, min_count = max(counts), min(counts)
+    new_imbalance = max_count / min_count
+    print(f"\nImbalance ratio: {new_imbalance:.2f}:1")
+    
+    return X_sequences_resampled, X_masks_resampled, X_market_ids_resampled, X_periods_resampled, Y_resampled
 
 def create_indicators(df, normalize=True, scaler_type='minmax'):
     # Copy dataframe
@@ -332,6 +419,33 @@ def create_mask(df, features):
     data["mask"] = valid_mask.astype(int).values
     return data, valid_mask
 
+def create_labels(df):
+    df = df.copy()
+    # Label
+    # Geser harga close ke depan
+    df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
+
+    # Hitung return masa depan
+    df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
+
+    # Buat label berdasarkan aturan
+    def create_label(x):
+        if np.isnan(x):
+            return np.nan
+        elif x > config.THRESHOLD_LABEL:
+            return "BUY"
+        elif x < -config.THRESHOLD_LABEL:
+            return "SELL"
+        else:
+            return "HOLD" if config.HOLD_LABEL else None
+
+    # dapatkan signal
+    df["Label"] = df["Future_Return"].apply(create_label)
+    
+    df.drop(columns=["Future_Close"], inplace=True)
+    df.drop(columns=["Future_Return"], inplace=True)
+    return df
+
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
     X_market_ids = []
@@ -422,6 +536,7 @@ def prepare_data(train_df, val_df):
 
     print("\n======== Train Dataset ========\n")
     X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train = create_sequences(df=train_df)
+    X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train = balance_dataset(X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train)
     X_market_ids_encoded_train = encoder_market_ids.fit_transform(X_market_ids_train)
     X_periods_encoded_train = encoder_periods.fit_transform(X_periods_train)
     Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
