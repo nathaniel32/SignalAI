@@ -8,10 +8,61 @@ import nn_signal.model as nn_model
 import config
 from torchinfo import summary
 import numpy as np
+import torch.nn as nn
 
 class Trainer:
     def __init__(self):
         pass
+
+    def train_fn(self, data_loader, model, optimizer, criterion):
+        model.train()
+        final_loss = 0
+
+        for batch in data_loader:
+            sequences = batch['sequence'].to(config.DEVICE)
+            masks = batch['masks'].to(config.DEVICE)
+            market_ids = batch['market_id'].to(config.DEVICE)
+            periods = batch['period'].to(config.DEVICE)
+            labels = batch['label'].to(config.DEVICE)
+
+            optimizer.zero_grad()
+            output = model(sequences, masks, market_ids, periods)
+            loss = criterion(output, labels)
+            loss.backward()
+            
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+            optimizer.step()
+            
+            final_loss += loss.item()
+
+        return final_loss/len(data_loader.dataset)
+
+    def val_fn(self, data_loader, model, criterion):
+        model.eval()
+        final_loss = 0
+        preds_array = []
+        solution_array = []
+
+        with torch.no_grad():
+            for batch in data_loader:
+                sequences = batch['sequence'].to(config.DEVICE)
+                masks = batch['masks'].to(config.DEVICE)
+                market_ids = batch['market_id'].to(config.DEVICE)
+                periods = batch['period'].to(config.DEVICE)
+                labels = batch['label'].to(config.DEVICE)
+
+                output =  model(sequences, masks, market_ids, periods)
+                loss =  criterion(output, labels)
+    
+                final_loss += loss.item()
+
+                _, preds_labels = utils.to_yhat(output)
+
+                preds_array.extend(preds_labels)
+                solution_array.extend(labels)
+
+        return final_loss/len(data_loader.dataset), preds_array, solution_array
 
     def main(self, datasets_df):
         torch.manual_seed(config.SEED)
@@ -119,8 +170,8 @@ class Trainer:
                 start_time = time.time()
 
                 for epoch in range(config.EPOCHS):
-                    train_loss = utils.train_fn(train_loader, model, optimizer, criterion)
-                    val_loss, preds_array, solution_array = utils.val_fn(val_loader, model, criterion)
+                    train_loss = self.train_fn(train_loader, model, optimizer, criterion)
+                    val_loss, preds_array, solution_array = self.val_fn(val_loader, model, criterion)
                     
                     scheduler.step(val_loss)
                     

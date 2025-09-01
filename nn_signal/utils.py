@@ -1,20 +1,43 @@
 import torch
 import numpy as np
 import pandas as pd
-import torch.nn as nn
 from sklearn import preprocessing
 from torchmetrics import ConfusionMatrix
 from mlxtend.plotting import plot_confusion_matrix
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 from sklearn.utils import resample
-from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
-from imblearn.under_sampling import RandomUnderSampler
-from imblearn.combine import SMOTETomek, SMOTEENN
-from collections import Counter
 import config
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import os
+
+class DatasetManager(torch.utils.data.Dataset):
+    def __init__(self, sequences, masks, market_ids, periods, labels):
+        self.sequences = torch.FloatTensor(sequences)
+        self.masks = torch.FloatTensor(masks)
+        self.market_ids = torch.LongTensor(market_ids)
+        self.periods = torch.LongTensor(periods)
+        self.labels = torch.LongTensor(labels)
+    
+    def __len__(self):
+        return len(self.sequences)
+    
+    def __getitem__(self, idx):
+        return {
+            'sequence': self.sequences[idx],
+            'masks': self.masks[idx],
+            'market_id': self.market_ids[idx],
+            'period': self.periods[idx],
+            'label': self.labels[idx]
+        }
+    
+def to_yhat(logits):
+    logits = logits.view(-1, logits.shape[-1]).cpu().detach()
+    probs = torch.softmax(logits, dim=1)
+    y_hat = torch.argmax(probs, dim=1)
+    return probs.numpy(), y_hat.numpy()
+
+#########################################################################################
 
 def plot_dataset_all(df, filename="data/dataset.png"):
     os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -130,32 +153,6 @@ def show_conf_matrix(preds_array, solution_array, label, title, binary=False, pl
     else:
         return None
 
-def to_yhat(logits):
-    logits = logits.view(-1, logits.shape[-1]).cpu().detach()
-    probs = torch.softmax(logits, dim=1)
-    y_hat = torch.argmax(probs, dim=1)
-    return probs.numpy(), y_hat.numpy()
-
-class DatasetManager(torch.utils.data.Dataset):
-    def __init__(self, sequences, masks, market_ids, periods, labels):
-        self.sequences = torch.FloatTensor(sequences)
-        self.masks = torch.FloatTensor(masks)
-        self.market_ids = torch.LongTensor(market_ids)
-        self.periods = torch.LongTensor(periods)
-        self.labels = torch.LongTensor(labels)
-    
-    def __len__(self):
-        return len(self.sequences)
-    
-    def __getitem__(self, idx):
-        return {
-            'sequence': self.sequences[idx],
-            'masks': self.masks[idx],
-            'market_id': self.market_ids[idx],
-            'period': self.periods[idx],
-            'label': self.labels[idx]
-        }
-
 def print_table_info(df, title, filename="data/log_df.csv"):
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     df.to_csv(filename, index=False)
@@ -171,6 +168,8 @@ def print_table_info(df, title, filename="data/log_df.csv"):
             print(f"- {label}: {count}")
     
     print("="*50)
+
+#########################################################################################
 
 def create_labels(df):
     df = df.copy()
@@ -451,91 +450,3 @@ def prepare_data(train_df, val_df):
     Y_labels_encoded_val_filtered = encoder_labels.transform(Y_labels_val_filtered)
     
     return (X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val_filtered, X_masks_val_filtered, X_market_ids_encoded_val_filtered, X_periods_encoded_val_filtered, Y_labels_encoded_val_filtered), (encoder_market_ids, encoder_periods, encoder_labels)
-
-def balance_data(features, labels, method, random_state):
-    if method == 'smote':
-        # SMOTE - Synthetic Minority Oversampling Technique
-        smote = SMOTE(random_state=random_state, k_neighbors=min(5, Counter(labels).most_common()[-1][1]-1))
-        features_balanced, labels_balanced = smote.fit_resample(features, labels)
-        
-    elif method == 'adasyn':
-        # ADASYN - Adaptive Synthetic Sampling
-        adasyn = ADASYN(random_state=random_state)
-        features_balanced, labels_balanced = adasyn.fit_resample(features, labels)
-        
-    elif method == 'oversample':
-        # Random Oversampling
-        ros = RandomOverSampler(random_state=random_state)
-        features_balanced, labels_balanced = ros.fit_resample(features, labels)
-        
-    elif method == 'undersample':
-        # Random Undersampling
-        rus = RandomUnderSampler(random_state=random_state)
-        features_balanced, labels_balanced = rus.fit_resample(features, labels)
-        
-    elif method == 'combine':
-        # Combined approach: SMOTE + Tomek links
-        smote_tomek = SMOTETomek(random_state=random_state)
-        features_balanced, labels_balanced = smote_tomek.fit_resample(features, labels)
-        
-    elif method == 'smoteenn':
-        # SMOTE + Edited Nearest Neighbours
-        smote_enn = SMOTEENN(random_state=random_state)
-        features_balanced, labels_balanced = smote_enn.fit_resample(features, labels)
-         
-    else:
-        print(f"Unknown method: {method}. Using original data.")
-        features_balanced, labels_balanced = features, labels
-    
-    return features_balanced, labels_balanced
-
-def train_fn(data_loader, model, optimizer, criterion):
-    model.train()
-    final_loss = 0
-
-    for batch in data_loader:
-        sequences = batch['sequence'].to(config.DEVICE)
-        masks = batch['masks'].to(config.DEVICE)
-        market_ids = batch['market_id'].to(config.DEVICE)
-        periods = batch['period'].to(config.DEVICE)
-        labels = batch['label'].to(config.DEVICE)
-
-        optimizer.zero_grad()
-        output = model(sequences, masks, market_ids, periods)
-        loss = criterion(output, labels)
-        loss.backward()
-        
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
-        optimizer.step()
-        
-        final_loss += loss.item()
-
-    return final_loss/len(data_loader.dataset)
-
-def val_fn(data_loader, model, criterion):
-    
-    model.eval()
-    final_loss = 0
-    preds_array = []
-    solution_array = []
-
-    with torch.no_grad():
-        for batch in data_loader:
-            sequences = batch['sequence'].to(config.DEVICE)
-            masks = batch['masks'].to(config.DEVICE)
-            market_ids = batch['market_id'].to(config.DEVICE)
-            periods = batch['period'].to(config.DEVICE)
-            labels = batch['label'].to(config.DEVICE)
-
-            output =  model(sequences, masks, market_ids, periods)
-            loss =  criterion(output, labels)
- 
-            final_loss += loss.item()
-
-            _, preds_labels = to_yhat(output)
-
-            preds_array.extend(preds_labels)
-            solution_array.extend(labels)
-
-    return final_loss/len(data_loader.dataset), preds_array, solution_array
