@@ -13,6 +13,7 @@ import os
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 from collections import Counter
+import random
 
 class DatasetManager(torch.utils.data.Dataset):
     def __init__(self, sequences, masks, market_ids, periods, labels):
@@ -422,13 +423,9 @@ def create_mask(df, features):
 def create_labels(df):
     df = df.copy()
     # Label
-    # Geser harga close ke depan
     df["Future_Close"] = df["close"].shift(-config.HORIZON_LABEL)
-
-    # Hitung return masa depan
     df["Future_Return"] = (df["Future_Close"] - df["close"]) / df["close"]
 
-    # Buat label berdasarkan aturan
     def create_label(x):
         if np.isnan(x):
             return np.nan
@@ -437,7 +434,10 @@ def create_labels(df):
         elif x < -config.THRESHOLD_LABEL:
             return "SELL"
         else:
-            return "HOLD" if config.HOLD_LABEL else None
+            if config.THRESHOLD_LABEL == 0:
+                return random.choice(["BUY", "SELL"])
+            else:
+                return "HOLD"
 
     # dapatkan signal
     df["Label"] = df["Future_Return"].apply(create_label)
