@@ -381,8 +381,7 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         'rsi_momentum', 'price_acceleration'
     ]
     
-    # Optional: Apply additional normalization
-    """ if normalize:
+    if normalize:
         scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
         
         # Only normalize the indicator columns
@@ -404,9 +403,9 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         ai_indicators = [col + '_scaled' for col in ai_indicators]
         
         # Store scaler for inverse transform later
-        data.scaler = scaler """
+        data.scaler = scaler
     
-    if normalize:
+    """if normalize:
         scaler = MinMaxScaler() if scaler_type == 'minmax' else StandardScaler()
         
         # Only normalize the indicator columns
@@ -439,7 +438,7 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
         ai_indicators = [col + '_scaled' for col in ai_indicators]
         
         # Store scaler for inverse transform later
-        data.scaler = scaler
+        data.scaler = scaler"""
     
     return data, ai_indicators
 
