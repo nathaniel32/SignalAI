@@ -22,7 +22,7 @@ class Trainer:
             sequences = batch['sequence'].to(config.DEVICE)
             labels = batch['label'].to(config.DEVICE)
 
-            print(sequences.shape, labels.shape)
+            #print(sequences.shape, labels.shape)
 
             optimizer.zero_grad()
             output = model(sequences)
