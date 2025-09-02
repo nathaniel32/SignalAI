@@ -16,11 +16,8 @@ from collections import Counter
 import random
 
 class DatasetManager(torch.utils.data.Dataset):
-    def __init__(self, sequences, masks, market_ids, periods, labels):
+    def __init__(self, sequences, labels):
         self.sequences = torch.FloatTensor(sequences)
-        self.masks = torch.FloatTensor(masks)
-        self.market_ids = torch.LongTensor(market_ids)
-        self.periods = torch.LongTensor(periods)
         self.labels = torch.LongTensor(labels)
     
     def __len__(self):
@@ -29,9 +26,6 @@ class DatasetManager(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return {
             'sequence': self.sequences[idx],
-            'masks': self.masks[idx],
-            'market_id': self.market_ids[idx],
-            'period': self.periods[idx],
             'label': self.labels[idx]
         }
     
@@ -174,117 +168,6 @@ def print_table_info(df, title, filename="data/log_df.csv"):
     print("="*50)
 
 #########################################################################################
-
-def balance_dataset(X_sequences, X_masks, X_market_ids, X_periods, Y_labels, 
-                    balance_strategy='hybrid', target_ratio=1.5):
-    """
-    Balance dataset with multiple strategies
-    
-    balance_strategy:
-    - 'undersample': Reduce majority class
-    - 'oversample': Increase minority classes  
-    - 'hybrid': Combination of both
-    - 'smote': Synthetic Minority Oversampling
-    - 'weighted': Use class weights (no data modification)
-    """
-    
-    # Check current distribution
-    label_counts = Counter(Y_labels)
-    print(f"\n{'='*60}")
-    print(f"BALANCING DATASET")
-    print(f"{'='*60}")
-    print(f"Original distribution: {label_counts}")
-    
-    if balance_strategy == 'weighted':
-        # Calculate class weights for loss function
-        from sklearn.utils.class_weight import compute_class_weight
-        classes = np.unique(Y_labels)
-        class_weights = compute_class_weight(
-            'balanced', 
-            classes=classes, 
-            y=Y_labels
-        )
-        print(f"Using class weights: {dict(zip(classes, class_weights))}")
-        return X_sequences, X_masks, X_market_ids, X_periods, Y_labels, dict(zip(classes, class_weights))
-    
-    # Reshape for resampling
-    n_samples = X_sequences.shape[0]
-    n_features = X_sequences.shape[1] * X_sequences.shape[2]
-    X_flat = X_sequences.reshape(n_samples, n_features)
-    
-    # Combine all features for resampling
-    X_combined = np.column_stack([
-        X_flat, 
-        X_masks,
-        X_market_ids.reshape(-1, 1),
-        X_periods.reshape(-1, 1)
-    ])
-    
-    if balance_strategy == 'undersample':
-        # Keep all minority, reduce majority
-        min_count = min(label_counts.values())
-        sampling_strategy = {
-            label: min(count, int(min_count * target_ratio))
-            for label, count in label_counts.items()
-        }
-        sampler = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
-        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
-        
-    elif balance_strategy == 'oversample' or balance_strategy == 'smote':
-        # Increase minority to match majority
-        max_count = max(label_counts.values())
-        sampling_strategy = {
-            label: max(count, int(max_count / target_ratio))
-            for label, count in label_counts.items()
-        }
-        sampler = SMOTE(sampling_strategy=sampling_strategy, random_state=42, k_neighbors=5)
-        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
-        
-    elif balance_strategy == 'hybrid':
-        # First oversample minority, then undersample majority
-        median_count = int(np.median(list(label_counts.values())))
-        
-        # Step 1: Oversample minority classes
-        oversample_strategy = {}
-        for label, count in label_counts.items():
-            if count < median_count:
-                oversample_strategy[label] = median_count
-        
-        if oversample_strategy:
-            # Only oversample if there are minority classes
-            oversampler = SMOTE(sampling_strategy='auto', random_state=42, k_neighbors=min(5, min(label_counts.values())-1))
-            X_combined, Y_labels = oversampler.fit_resample(X_combined, Y_labels)
-        
-        # Step 2: Undersample majority classes  
-        label_counts = Counter(Y_labels)
-        undersample_strategy = {
-            label: min(count, int(median_count * target_ratio))
-            for label, count in label_counts.items()
-        }
-        sampler = RandomUnderSampler(sampling_strategy=undersample_strategy, random_state=42)
-        X_resampled, Y_resampled = sampler.fit_resample(X_combined, Y_labels)
-    
-    else:
-        raise ValueError(f"Unknown balance strategy: {balance_strategy}")
-    
-    # Reshape back
-    X_sequences_resampled = X_resampled[:, :n_features].reshape(-1, X_sequences.shape[1], X_sequences.shape[2])
-    X_masks_resampled = X_resampled[:, n_features:n_features+X_masks.shape[1]]
-    X_market_ids_resampled = X_resampled[:, -2].astype(int)
-    X_periods_resampled = X_resampled[:, -1].astype(int)
-    
-    # Print balanced distribution
-    print(f"\nBalanced distribution:")
-    unique, counts = np.unique(Y_resampled, return_counts=True)
-    for signal, count in zip(unique, counts):
-        print(f"   - {signal:>8}: {count:>7,} samples ({count/len(Y_resampled)*100:>6.2f}%)")
-    
-    # Calculate new imbalance ratio
-    max_count, min_count = max(counts), min(counts)
-    new_imbalance = max_count / min_count
-    print(f"\nImbalance ratio: {new_imbalance:.2f}:1")
-    
-    return X_sequences_resampled, X_masks_resampled, X_market_ids_resampled, X_periods_resampled, Y_resampled
 
 def create_indicators(df, normalize=True, scaler_type='minmax'):
     # Copy dataframe
@@ -442,12 +325,6 @@ def create_indicators(df, normalize=True, scaler_type='minmax'):
     
     return data, ai_indicators
 
-def create_mask(df, features):
-    data = df.copy()
-    valid_mask = ~df[features].isnull().any(axis=1)
-    data["mask"] = valid_mask.astype(int).values
-    return data, valid_mask
-
 def create_labels(df):
     df = df.copy()
     # Label
@@ -479,10 +356,7 @@ def create_labels(df):
 
 def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     X_sequences = []
-    X_market_ids = []
-    X_periods = []
     Y_labels = []
-    X_masks = []
     
     # Group by market_id dan period
     for (market_id, period), group in df.groupby(['market_id', 'period']):
@@ -502,29 +376,13 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             # Add Indicators
             group_candle_sequence_indicator, ai_features = create_indicators(df=group_candle_sequence_label)
 
-            # Inf -> Nan
-            group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan)
+            # Clean Data
+            group_candle_sequence_indicator = group_candle_sequence_indicator.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
 
-            # mask: valid = 1, invalid = 0
-            group_candle_sequence_indicator, valid_mask = create_mask(df=group_candle_sequence_indicator, features=ai_features)
-            
-            if valid_mask.sum() == 0:
-                print("Empty", i)
-                continue
-
-            sequence = group_candle_sequence_indicator[ai_features].values
-            sequence = np.nan_to_num(sequence, nan=0.0)
-            mask = group_candle_sequence_indicator["mask"].values
-
-            market_id = group_candle_sequence_indicator['market_id'].iloc[-1]
-            period = group_candle_sequence_indicator['period'].iloc[-1]
-
-            target_label = group_candle_sequence_indicator['Label'][valid_mask].iloc[-1]
+            sequence = group_candle_sequence_indicator[ai_features].iloc[-1]
+            target_label = group_candle_sequence_indicator['Label'].iloc[-1]
 
             X_sequences.append(sequence)
-            X_masks.append(mask)
-            X_market_ids.append(market_id)
-            X_periods.append(period)
             Y_labels.append(target_label)
 
             #print(sequence.shape)
@@ -536,16 +394,10 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             #break
     
     X_sequences_np = np.array(X_sequences)
-    X_masks_np = np.array(X_masks)
-    X_market_ids_np = np.array(X_market_ids)
-    X_periods_np = np.array(X_periods)
     Y_labels_np = np.array(Y_labels)
 
     print(f"\nData shapes:")
     print(f"- X_sequences: {X_sequences_np.shape}")
-    print(f"- X_masks: {X_masks_np.shape}")
-    print(f"- X_market_ids: {X_market_ids_np.shape}")  
-    print(f"- X_periods: {X_periods_np.shape}")
     print(f"- Y_labels: {Y_labels_np.shape}")
     
     print(f"\nLabel distribution:")
@@ -553,41 +405,27 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
     for signal, count in zip(unique, counts):
         print(f"- {signal}: {count} ({count/len(Y_labels_np)*100:.1f}%)")
 
-    return X_sequences_np, X_masks_np, X_market_ids_np, X_periods_np, Y_labels_np
+    return X_sequences_np, Y_labels_np
 
 def prepare_data(train_df, val_df):
-    encoder_market_ids = preprocessing.LabelEncoder()
-    encoder_periods = preprocessing.LabelEncoder()
     encoder_labels = preprocessing.LabelEncoder()
 
     print("\n======== Train Dataset ========\n")
-    X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train = create_sequences(df=train_df)
-    X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train = balance_dataset(X_sequences_train, X_masks_train, X_market_ids_train, X_periods_train, Y_labels_train)
-    X_market_ids_encoded_train = encoder_market_ids.fit_transform(X_market_ids_train)
-    X_periods_encoded_train = encoder_periods.fit_transform(X_periods_train)
+    X_sequences_train, Y_labels_train = create_sequences(df=train_df)
+
     Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
 
-    train_market_ids = set(encoder_market_ids.classes_)
-    train_periods = set(encoder_periods.classes_)
     train_labels = set(encoder_labels.classes_)
 
     print("\n======== Val Dataset ========\n")
-    X_sequences_val, X_masks_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
+    X_sequences_val, Y_labels_val = create_sequences(df=val_df)
 
-    mask_market_ids = np.array([mid in train_market_ids for mid in X_market_ids_val])
-    mask_periods = np.array([period in train_periods for period in X_periods_val])
     mask_labels = np.array([label in train_labels for label in Y_labels_val])
 
-    valid_mask = mask_market_ids & mask_periods & mask_labels
+    X_sequences_val_filtered = X_sequences_val[mask_labels]
+    Y_labels_val_filtered = Y_labels_val[mask_labels]
 
-    X_sequences_val_filtered = X_sequences_val[valid_mask]
-    X_masks_val_filtered = X_masks_val[valid_mask]
-    X_market_ids_val_filtered = X_market_ids_val[valid_mask]
-    X_periods_val_filtered = X_periods_val[valid_mask]
-    Y_labels_val_filtered = Y_labels_val[valid_mask]
 
-    X_market_ids_encoded_val_filtered = encoder_market_ids.transform(X_market_ids_val_filtered)
-    X_periods_encoded_val_filtered = encoder_periods.transform(X_periods_val_filtered)
     Y_labels_encoded_val_filtered = encoder_labels.transform(Y_labels_val_filtered)
     
-    return (X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train), (X_sequences_val_filtered, X_masks_val_filtered, X_market_ids_encoded_val_filtered, X_periods_encoded_val_filtered, Y_labels_encoded_val_filtered), (encoder_market_ids, encoder_periods, encoder_labels)
+    return (X_sequences_train, Y_labels_encoded_train), (X_sequences_val_filtered, Y_labels_encoded_val_filtered), encoder_labels

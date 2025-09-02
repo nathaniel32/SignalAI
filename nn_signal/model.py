@@ -1,187 +1,109 @@
 import torch.nn as nn
-import torch
-import torch.nn.functional as F
 
 class Model(nn.Module):
-    def __init__(self, n_markets, n_periods, n_features, n_labels,
-                 market_embedding_dim=32, period_embedding_dim=16,
-                 lstm_hidden=128, lstm_layers=2, attention_heads=8):
+    def __init__(self, input_size, num_classes, hidden_size=128, num_layers=2, dropout=0.3):
         super(Model, self).__init__()
         
-        self.n_features = n_features
-        self.lstm_hidden = lstm_hidden
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.num_classes = num_classes
         
-        # Enhanced embeddings
-        self.market_embedding = nn.Embedding(n_markets, market_embedding_dim)
-        self.period_embedding = nn.Embedding(n_periods, period_embedding_dim)
+        # Normalization
+        self.input_norm = nn.LayerNorm(input_size)
         
-        # Input projection
-        self.input_projection = nn.Linear(n_features, lstm_hidden)
-        self.input_norm = nn.LayerNorm(lstm_hidden)
-        
-        # Bidirectional LSTM
+        # LSTM layers
         self.lstm = nn.LSTM(
-            input_size=lstm_hidden,
-            hidden_size=lstm_hidden,
-            num_layers=lstm_layers,
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0.0,  # No dropout for single layer
             batch_first=True,
-            dropout=0.4 if lstm_layers > 1 else 0,
             bidirectional=True
         )
         
-        # Multi-head attention
+        # Self-attention with residual connection
         self.attention = nn.MultiheadAttention(
-            embed_dim=lstm_hidden * 2,
-            num_heads=attention_heads,
-            dropout=0.5,
+            embed_dim=hidden_size * 2,  # *2 for bidirectional
+            num_heads=4,  # Reduced from 8 to prevent overfitting
+            dropout=dropout * 0.5,  # Lighter dropout in attention
             batch_first=True
         )
-        self.attention_norm = nn.LayerNorm(lstm_hidden * 2)
         
-        # Calculate correct combined dimension
-        sequence_dim = lstm_hidden * 2 * 3  # 768 for lstm_hidden=128
-        combined_dim = sequence_dim + market_embedding_dim + period_embedding_dim
+        # Attention output normalization
+        self.attn_norm = nn.LayerNorm(hidden_size * 2)
         
-        # Feature fusion
-        self.feature_fusion = nn.Sequential(
-            nn.Linear(combined_dim, 256),
-            nn.LayerNorm(256),
+        # Global pooling
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        
+        # Feature extraction with residual connections
+        self.feature_extractor = nn.Sequential(
+            nn.Linear(hidden_size * 2, hidden_size),
+            nn.BatchNorm1d(hidden_size),  # BatchNorm
+            nn.GELU(),  # GELU instead of ReLU
+            nn.Dropout(dropout * 0.5),
+            
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.BatchNorm1d(hidden_size // 2),
             nn.GELU(),
-            nn.Dropout(0.3)
+            nn.Dropout(dropout * 0.3)
         )
         
-        # Residual blocks
-        self.residual_blocks = nn.ModuleList([
-            self._make_residual_block(256, 256) for _ in range(2)
-        ])
-        
-        # Output classifier
+        # Classification head
         self.classifier = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.LayerNorm(128),
+            nn.Linear(hidden_size // 2, hidden_size // 4),
+            nn.BatchNorm1d(hidden_size // 4),
             nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(64, n_labels)
+            nn.Dropout(dropout * 0.2),
+            nn.Linear(hidden_size // 4, num_classes)
         )
         
-        # Temperature for calibration
-        self.temperature = nn.Parameter(torch.ones(1))
+        # Initialize weights
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            # Xavier initialization with gain
+            nn.init.xavier_uniform_(module.weight, gain=nn.init.calculate_gain('relu'))
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0.1)  # Small positive bias
+        elif isinstance(module, nn.LSTM):
+            for name, param in module.named_parameters():
+                if 'weight_ih' in name:
+                    nn.init.xavier_uniform_(param)
+                elif 'weight_hh' in name:
+                    nn.init.orthogonal_(param)  # Orthogonal for recurrent weights
+                elif 'bias' in name:
+                    nn.init.constant_(param, 0)
+                    # Set forget gate bias to 1
+                    n = param.size(0)
+                    param.data[n//4:n//2].fill_(1.0)
+        elif isinstance(module, (nn.BatchNorm1d, nn.LayerNorm)):
+            nn.init.constant_(module.weight, 1.0)
+            nn.init.constant_(module.bias, 0.0)
+    
+    def forward(self, x):
+        batch_size, seq_len, input_size = x.size()
         
-        self._init_weights()
-    
-    def _make_residual_block(self, in_dim, out_dim):
-        return nn.Sequential(
-            nn.Linear(in_dim, out_dim),
-            nn.LayerNorm(out_dim),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(out_dim, out_dim),
-            nn.LayerNorm(out_dim)
-        )
-    
-    def _init_weights(self):
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
-            elif isinstance(module, nn.LSTM):
-                for name, param in module.named_parameters():
-                    if 'weight' in name:
-                        nn.init.orthogonal_(param)
-                    elif 'bias' in name:
-                        nn.init.constant_(param, 0)
-            elif isinstance(module, nn.Embedding):
-                nn.init.normal_(module.weight, 0, 0.1)
-    
-    def forward(self, sequence, mask, market_id, period):
-        batch_size, seq_len = sequence.size(0), sequence.size(1)
-        
-        # Input projection
-        x = self.input_projection(sequence)
+        # Input normalization
         x = self.input_norm(x)
         
-        # Apply mask to input (zero out invalid positions)
-        if mask is not None:
-            mask_expanded = mask.unsqueeze(-1).expand_as(x)  # (batch, seq, hidden)
-            x = x * mask_expanded
+        # LSTM forward pass
+        lstm_out, (h_n, c_n) = self.lstm(x)
         
-        # Bidirectional LSTM
-        lstm_out, _ = self.lstm(x)  # (batch, seq, hidden*2)
+        # Self-attention with residual connection
+        attn_out, attn_weights = self.attention(lstm_out, lstm_out, lstm_out)
+        attn_out = self.attn_norm(attn_out + lstm_out)  # Residual connection
         
-        # Apply mask to LSTM output
-        if mask is not None:
-            mask_expanded = mask.unsqueeze(-1).expand_as(lstm_out)
-            lstm_out = lstm_out * mask_expanded
+        # Global average pooling
+        # Shape: (batch_size, seq_len, hidden_size*2) -> (batch_size, hidden_size*2, seq_len)
+        pooled = self.global_pool(attn_out.transpose(1, 2))
+        # Shape: (batch_size, hidden_size*2, 1) -> (batch_size, hidden_size*2)
+        pooled = pooled.squeeze(-1)
         
-        # Self-attention with mask
-        if mask is not None:
-            # Create key padding mask (True = ignore, False = attend)
-            key_padding_mask = (mask == 0)  # Invert mask for attention
-            attn_out, _ = self.attention(
-                lstm_out, lstm_out, lstm_out,
-                key_padding_mask=key_padding_mask
-            )
-        else:
-            attn_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
+        # Feature extraction
+        features = self.feature_extractor(pooled)
         
-        lstm_out = self.attention_norm(lstm_out + attn_out)
-        
-        # Apply mask again after attention
-        if mask is not None:
-            mask_expanded = mask.unsqueeze(-1).expand_as(lstm_out)
-            lstm_out = lstm_out * mask_expanded
-        
-        # Masked pooling strategies
-        if mask is not None:
-            # Get valid sequence lengths for each sample
-            valid_lengths = mask.sum(dim=1, keepdim=True).float()  # (batch, 1)
-            valid_lengths = torch.clamp(valid_lengths, min=1.0)  # Avoid division by zero
-            
-            # Last valid output (not just last position)
-            batch_indices = torch.arange(batch_size, device=sequence.device, dtype=torch.long)
-            last_valid_indices = (mask.sum(dim=1) - 1).clamp(min=0).long()  # Convert to long
-            last_output = lstm_out[batch_indices, last_valid_indices]  # (batch, hidden*2)
-            
-            # Masked max pooling
-            masked_lstm = lstm_out.clone()
-            masked_lstm[mask == 0] = float('-inf')  # Set invalid positions to -inf
-            max_output = torch.max(masked_lstm, dim=1)[0]  # (batch, hidden*2)
-            
-            # Masked mean pooling
-            masked_sum = (lstm_out * mask_expanded).sum(dim=1)  # (batch, hidden*2)
-            mean_output = masked_sum / valid_lengths  # (batch, hidden*2)
-            
-        else:
-            # Standard pooling without mask
-            last_output = lstm_out[:, -1, :]
-            max_output = torch.max(lstm_out, dim=1)[0]
-            mean_output = torch.mean(lstm_out, dim=1)
-        
-        # Concatenate pooled outputs
-        sequence_features = torch.cat([last_output, max_output, mean_output], dim=1)
-        
-        # Embeddings
-        market_emb = self.market_embedding(market_id)
-        period_emb = self.period_embedding(period)
-        
-        # Combine all features
-        combined = torch.cat([sequence_features, market_emb, period_emb], dim=1)
-        
-        # Feature fusion
-        x = self.feature_fusion(combined)
-        
-        # Residual blocks
-        for block in self.residual_blocks:
-            residual = x
-            x = block(x) + residual
-            x = F.gelu(x)
-        
-        # Final classification
-        logits = self.classifier(x)
-        logits = logits / self.temperature
+        # Classification
+        logits = self.classifier(features)
         
         return logits

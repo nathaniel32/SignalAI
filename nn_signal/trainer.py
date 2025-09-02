@@ -14,19 +14,18 @@ class Trainer:
     def __init__(self):
         pass
 
-    def train_fn(self, data_loader, model, optimizer, criterion):
+    def _train_fn(self, data_loader, model, optimizer, criterion):
         model.train()
         final_loss = 0
 
         for batch in data_loader:
             sequences = batch['sequence'].to(config.DEVICE)
-            masks = batch['masks'].to(config.DEVICE)
-            market_ids = batch['market_id'].to(config.DEVICE)
-            periods = batch['period'].to(config.DEVICE)
             labels = batch['label'].to(config.DEVICE)
 
+            print(sequences.shape, labels.shape)
+
             optimizer.zero_grad()
-            output = model(sequences, masks, market_ids, periods)
+            output = model(sequences)
             loss = criterion(output, labels)
             loss.backward()
             
@@ -38,7 +37,7 @@ class Trainer:
 
         return final_loss/len(data_loader.dataset)
 
-    def val_fn(self, data_loader, model, criterion):
+    def _val_fn(self, data_loader, model, criterion):
         model.eval()
         final_loss = 0
         preds_array = []
@@ -47,12 +46,9 @@ class Trainer:
         with torch.no_grad():
             for batch in data_loader:
                 sequences = batch['sequence'].to(config.DEVICE)
-                masks = batch['masks'].to(config.DEVICE)
-                market_ids = batch['market_id'].to(config.DEVICE)
-                periods = batch['period'].to(config.DEVICE)
                 labels = batch['label'].to(config.DEVICE)
 
-                output =  model(sequences, masks, market_ids, periods)
+                output =  model(sequences)
                 loss =  criterion(output, labels)
     
                 final_loss += loss.item()
@@ -74,31 +70,26 @@ class Trainer:
         try:
             if datasets_df:
                 train_df, val_df = datasets_df
-                prepared_train_data, prepared_val_data, encoders = utils.prepare_data(train_df=train_df, val_df=val_df)
+                prepared_train_data, prepared_val_data, encoder_labels = utils.prepare_data(train_df=train_df, val_df=val_df)
             else:
                 meta_data = joblib.load(config.META_PATH)
                 prepared_train_data = meta_data['prepared_train_data']
                 prepared_val_data = meta_data['prepared_val_data']
-                encoders = meta_data['encoders']
+                encoder_labels = meta_data['encoder_labels']
 
-            X_sequences_train, X_masks_train, X_market_ids_encoded_train, X_periods_encoded_train, Y_labels_encoded_train = prepared_train_data
-            X_sequences_val, X_masks_val, X_market_ids_encoded_val, X_periods_encoded_val, Y_labels_encoded_val = prepared_val_data
-            encoder_market_ids, encoder_periods, encoder_labels = encoders
+            X_sequences_train, Y_labels_encoded_train = prepared_train_data
+            X_sequences_val, Y_labels_encoded_val = prepared_val_data
 
             n_train_data = len(X_sequences_train)
             n_val_data = len(X_sequences_val)
             total_data = n_train_data + n_val_data
 
-            n_markets = len(encoder_market_ids.classes_)
-            n_periods = len(encoder_periods.classes_)
-            n_features = X_sequences_train.shape[2]
+            n_features = X_sequences_train.shape[1]
             n_labels = len(encoder_labels.classes_)
 
-            model = nn_model.Model(n_markets, n_periods, n_features, n_labels).to(config.DEVICE)
+            model = nn_model.Model(n_features, n_labels).to(config.DEVICE)
 
             print("\nEncoder:")
-            print("- Markets:", encoder_market_ids.classes_)
-            print("- Periods:", encoder_periods.classes_)
             print("- Labels:", encoder_labels.classes_)
 
             print(f"\n- Device: {str(config.DEVICE)}")
@@ -106,12 +97,12 @@ class Trainer:
             print(f'- Validation Data: {n_val_data}')
             print(f'- Total Data: {total_data}')
 
-            summary(model, input_data=[
+            """ summary(model, input_data=[
                 torch.randn(1, config.SEQUENCE_CANDLE_LENGTH, n_features).to(config.DEVICE),
                 torch.randn(1, config.SEQUENCE_CANDLE_LENGTH).to(config.DEVICE),
                 torch.randint(0, n_markets, (1,)).to(config.DEVICE),
                 torch.randint(0, n_periods, (1,)).to(config.DEVICE)
-            ])
+            ]) """
 
             total_params = sum(p.numel() for p in model.parameters())
             print("Parameters:", total_params)
@@ -120,11 +111,8 @@ class Trainer:
                 meta_data = {
                     "prepared_train_data": prepared_train_data,
                     "prepared_val_data": prepared_val_data,
-                    'encoders': encoders,
                     "n_features": n_features,
                     "n_labels": n_labels,
-                    'encoder_market_ids': encoder_market_ids,
-                    "encoder_periods": encoder_periods,
                     "encoder_labels": encoder_labels
                 }
                 os.makedirs(os.path.dirname(config.META_PATH), exist_ok=True)
@@ -132,24 +120,18 @@ class Trainer:
 
                 train_dataset = utils.DatasetManager(
                     sequences=X_sequences_train,
-                    masks=X_masks_train,
-                    market_ids=X_market_ids_encoded_train,
-                    periods=X_periods_encoded_train,
                     labels=Y_labels_encoded_train
                 )
 
                 val_dataset = utils.DatasetManager(
                     sequences=X_sequences_val,
-                    masks=X_masks_val,
-                    market_ids=X_market_ids_encoded_val,
-                    periods=X_periods_encoded_val,
                     labels=Y_labels_encoded_val
                 )
 
                 train_loader = DataLoader(dataset=train_dataset,
-                                            batch_size=config.TRAIN_BATCH_SIZE,
-                                            shuffle=True,
-                                            pin_memory=True)
+                                        batch_size=config.TRAIN_BATCH_SIZE,
+                                        shuffle=True,
+                                        pin_memory=True)
                 
                 val_loader = DataLoader(dataset=val_dataset,
                                         batch_size=config.VALIDATION_BATCH_SIZE,
@@ -178,8 +160,8 @@ class Trainer:
                 start_time = time.time()
 
                 for epoch in range(config.EPOCHS):
-                    train_loss = self.train_fn(train_loader, model, optimizer, criterion)
-                    val_loss, preds_array, solution_array = self.val_fn(val_loader, model, criterion)
+                    train_loss = self._train_fn(train_loader, model, optimizer, criterion)
+                    val_loss, preds_array, solution_array = self._val_fn(val_loader, model, criterion)
                     
                     scheduler.step(val_loss)
                     
