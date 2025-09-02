@@ -10,8 +10,9 @@ from sklearn.utils import resample
 import config
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import os
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
+from imblearn.combine import SMOTETomek, SMOTEENN
 from collections import Counter
 import random
 
@@ -168,6 +169,43 @@ def print_table_info(df, title, filename="data/log_df.csv"):
     print("="*50)
 
 #########################################################################################
+
+def balance_data(features, labels, method, random_state):
+    if method == 'smote':
+        # SMOTE - Synthetic Minority Oversampling Technique
+        smote = SMOTE(random_state=random_state, k_neighbors=min(5, Counter(labels).most_common()[-1][1]-1))
+        features_balanced, labels_balanced = smote.fit_resample(features, labels)
+        
+    elif method == 'adasyn':
+        # ADASYN - Adaptive Synthetic Sampling
+        adasyn = ADASYN(random_state=random_state)
+        features_balanced, labels_balanced = adasyn.fit_resample(features, labels)
+        
+    elif method == 'oversample':
+        # Random Oversampling
+        ros = RandomOverSampler(random_state=random_state)
+        features_balanced, labels_balanced = ros.fit_resample(features, labels)
+        
+    elif method == 'undersample':
+        # Random Undersampling
+        rus = RandomUnderSampler(random_state=random_state)
+        features_balanced, labels_balanced = rus.fit_resample(features, labels)
+        
+    elif method == 'combine':
+        # Combined approach: SMOTE + Tomek links
+        smote_tomek = SMOTETomek(random_state=random_state)
+        features_balanced, labels_balanced = smote_tomek.fit_resample(features, labels)
+        
+    elif method == 'smoteenn':
+        # SMOTE + Edited Nearest Neighbours
+        smote_enn = SMOTEENN(random_state=random_state)
+        features_balanced, labels_balanced = smote_enn.fit_resample(features, labels)
+         
+    else:
+        print(f"Unknown method: {method}. Using original data.")
+        features_balanced, labels_balanced = features, labels
+    
+    return features_balanced, labels_balanced
 
 def create_indicators(df, normalize=True, scaler_type='minmax'):
     # Copy dataframe
@@ -385,6 +423,8 @@ def create_sequences(df, sequence_length=config.SEQUENCE_CANDLE_LENGTH):
             X_sequences.append(sequence)
             Y_labels.append(target_label)
 
+            #print(sequence)
+            #print(target_label)
             #print(sequence.shape)
             #print(sequence)
             #print(mask)
@@ -412,7 +452,8 @@ def prepare_data(train_df, val_df):
 
     print("\n======== Train Dataset ========\n")
     X_sequences_train, Y_labels_train = create_sequences(df=train_df)
-
+    X_sequences_train, Y_labels_train = balance_data(X_sequences_train, Y_labels_train, method='smote', random_state=42)
+    
     Y_labels_encoded_train = encoder_labels.fit_transform(Y_labels_train)
 
     train_labels = set(encoder_labels.classes_)
@@ -424,7 +465,6 @@ def prepare_data(train_df, val_df):
 
     X_sequences_val_filtered = X_sequences_val[mask_labels]
     Y_labels_val_filtered = Y_labels_val[mask_labels]
-
 
     Y_labels_encoded_val_filtered = encoder_labels.transform(Y_labels_val_filtered)
     
