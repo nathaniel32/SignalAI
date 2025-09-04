@@ -245,14 +245,16 @@ class StockVisionTransformer(nn.Module):
 
 
 def create_model(n_markets, n_periods, n_features, n_labels):
-    if n_features <= 5:
+    """ if n_features <= 5:
         d_model = 256
     elif n_features <= 10:
         d_model = 384
     elif n_features <= 20:
         d_model = 512
     else:
-        d_model = 768
+        d_model = 768 """
+    
+    d_model = 32
     
     model = StockVisionTransformer(
         n_markets=n_markets,
@@ -260,10 +262,10 @@ def create_model(n_markets, n_periods, n_features, n_labels):
         n_features=n_features,
         n_labels=n_labels,
         d_model=d_model,
-        n_heads=8,
-        n_layers=6,
+        n_heads=4,
+        n_layers=3,
         d_ff=d_model * 4,
-        dropout=0.1
+        dropout=0.2
     )
     
     return model
