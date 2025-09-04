@@ -635,7 +635,7 @@ def prepare_data(train_df, val_df):
 
     print("\n======== Val Dataset ========\n")
     X_sequences_val, X_masks_val, X_market_ids_val, X_periods_val, Y_labels_val = create_sequences(df=val_df)
-
+    X_sequences_val, X_masks_val, X_market_ids_val, X_periods_val, Y_labels_val = balance_dataset(X_sequences_val, X_masks_val, X_market_ids_val, X_periods_val, Y_labels_val, balance_strategy='undersample', target_ratio=1.0)
     mask_market_ids = np.array([mid in train_market_ids for mid in X_market_ids_val])
     mask_periods = np.array([period in train_periods for period in X_periods_val])
     mask_labels = np.array([label in train_labels for label in Y_labels_val])
