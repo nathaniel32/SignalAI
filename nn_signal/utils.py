@@ -14,6 +14,8 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 from collections import Counter
 import random
+import torch.nn.functional as F
+import torch.nn as nn
 
 class DatasetManager(torch.utils.data.Dataset):
     def __init__(self, sequences, masks, market_ids, periods, labels):
@@ -40,6 +42,65 @@ def to_yhat(logits):
     probs = torch.softmax(logits, dim=1)
     y_hat = torch.argmax(probs, dim=1)
     return probs.numpy(), y_hat.numpy()
+
+###############################################################################################################
+
+class FocalLoss(nn.Module):
+    """Focal Loss to handle class imbalance and prevent mode collapse"""
+    def __init__(self, alpha=1.0, gamma=2.0, reduction='mean'):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+    
+    def forward(self, inputs, targets):
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+class LabelSmoothingLoss(nn.Module):
+    """Label smoothing to prevent overconfident predictions"""
+    def __init__(self, num_classes, smoothing=0.1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.smoothing = smoothing
+        
+    def forward(self, pred, target):
+        with torch.no_grad():
+            smooth_target = torch.zeros_like(pred)
+            smooth_target.fill_(self.smoothing / (self.num_classes - 1))
+            smooth_target.scatter_(1, target.unsqueeze(1), 1.0 - self.smoothing)
+        
+        return F.kl_div(F.log_softmax(pred, dim=1), smooth_target, reduction='batchmean')
+
+def get_optimized_training_setup(model, n_labels):
+    # Loss function - use Focal Loss for binary classification
+    if n_labels == 2:
+        criterion = FocalLoss(alpha=1.0, gamma=2.0)
+    else:
+        criterion = LabelSmoothingLoss(n_labels, smoothing=0.1)
+    
+    # Conservative optimizer settings
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=1e-4,            # Much lower learning rate
+        weight_decay=0.01,   # Strong regularization
+        betas=(0.9, 0.95)   # More stable momentum
+    )
+    
+    # Cosine annealing scheduler
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=100, eta_min=1e-6
+    )
+    
+    return criterion, optimizer, scheduler
 
 #########################################################################################
 

@@ -166,9 +166,10 @@ class Trainer:
                 class_weights = len(Y_labels_encoded_train) / (len(class_counts) * class_counts)
                 class_weights = torch.FloatTensor(class_weights).to(config.DEVICE)
 
-                criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
-                optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, mode="min")
+                criterion, optimizer, scheduler = utils.get_optimized_training_setup(model=model, n_labels=n_labels)
+                #criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
+                #optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
+                #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, mode="min")
 
                 best_loss = float('inf')
                 best_preds_array = []
