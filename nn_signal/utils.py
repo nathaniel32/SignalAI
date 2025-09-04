@@ -95,10 +95,11 @@ def get_optimized_training_setup(model, n_labels):
         betas=(0.9, 0.95)   # More stable momentum
     )
     
-    # Cosine annealing scheduler
+    """ # Cosine annealing scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=100, eta_min=1e-6
-    )
+    ) """
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=7, factor=0.5, mode="min")
     
     return criterion, optimizer, scheduler
 
