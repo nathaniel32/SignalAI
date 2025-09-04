@@ -13,17 +13,10 @@ class Predictor:
         self.meta_data = joblib.load(config.META_PATH)
         
         self.n_features = self.meta_data['n_features']
-        self.n_labels = self.meta_data['n_labels']
         self.encoder_market_ids = self.meta_data['encoder_market_ids']
         self.encoder_periods = self.meta_data['encoder_periods']
         self.encoder_labels = self.meta_data['encoder_labels']
-        
-        self.model = nn_model.Model(
-            len(self.encoder_market_ids.classes_),
-            len(self.encoder_periods.classes_),
-            self.n_features,
-            self.n_labels
-        )
+        self.model = nn_model.create_model(n_markets=len(self.encoder_market_ids.classes_), n_periods=len(self.encoder_periods.classes_), n_features=self.n_features, n_labels=len(self.encoder_labels.classes_)).to(config.DEVICE)
         
         self.model.load_state_dict(torch.load(model_path, weights_only=True, map_location=torch.device(config.DEVICE)))
         self.model.to(config.DEVICE).eval()

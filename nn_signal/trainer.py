@@ -94,7 +94,7 @@ class Trainer:
             n_features = X_sequences_train.shape[2]
             n_labels = len(encoder_labels.classes_)
 
-            model = nn_model.Model(n_markets, n_periods, n_features, n_labels).to(config.DEVICE)
+            model = nn_model.create_model(n_markets=n_markets, n_periods=n_periods, n_features=n_features, n_labels=n_labels).to(config.DEVICE)
 
             print("\nEncoder:")
             print("- Markets:", encoder_market_ids.classes_)
@@ -122,7 +122,6 @@ class Trainer:
                     "prepared_val_data": prepared_val_data,
                     'encoders': encoders,
                     "n_features": n_features,
-                    "n_labels": n_labels,
                     'encoder_market_ids': encoder_market_ids,
                     "encoder_periods": encoder_periods,
                     "encoder_labels": encoder_labels
