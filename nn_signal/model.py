@@ -244,7 +244,6 @@ class StockVisionTransformer(nn.Module):
         return attention_weights
 
 
-# Usage example with flexible features:
 def create_model(n_markets, n_periods, n_features, n_labels):
     if n_features <= 5:
         d_model = 256
@@ -253,17 +252,17 @@ def create_model(n_markets, n_periods, n_features, n_labels):
     elif n_features <= 20:
         d_model = 512
     else:
-        d_model = 768  # For very high dimensional features
+        d_model = 768
     
     model = StockVisionTransformer(
         n_markets=n_markets,
         n_periods=n_periods, 
-        n_features=n_features,  # Now flexible!
+        n_features=n_features,
         n_labels=n_labels,
-        d_model=d_model,        # Auto-adjusted
-        n_heads=8,              # Keeps consistent
-        n_layers=6,             # Keeps consistent
-        d_ff=d_model * 4,       # Scales with d_model
+        d_model=d_model,
+        n_heads=8,
+        n_layers=6,
+        d_ff=d_model * 4,
         dropout=0.1
     )
     
